@@ -32,6 +32,9 @@ class ReaderEngine(
         fun create(provider: ReaderProvider): ReaderEngine
     }
 
+    /** What the chrome shows, answered by whichever content type this session is for. */
+    val chrome: StateFlow<ReaderChromeState> get() = provider.chrome
+
     // Dialogs: one slot, so raising a dialog is also how the previous one closes.
 
     private val mutableDialog = MutableStateFlow<ReaderDialog?>(null)

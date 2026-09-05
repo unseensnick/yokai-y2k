@@ -205,6 +205,9 @@ class NovelReaderViewModel(
         val progressPercent: Int,
     )
 
+    /** The opened entry's own title, which a merged session keeps even as chapters cross sources. */
+    internal val entryTitle = MutableStateFlow<String?>(null)
+
     private val loadedChapter = MutableStateFlow<LoadedChapter?>(null)
     val chapter: StateFlow<LoadedChapter?> = loadedChapter
 
@@ -212,7 +215,10 @@ class NovelReaderViewModel(
         // Seed the per-novel orientation from the opened entry (the anchor for a merged novel), which
         // is what the eager seed above cannot read without a DB hit.
         viewModelScope.launchIO {
-            novelRepo.getById(novelId)?.let { orientationOverride.value = it.readerOrientation.toInt() }
+            novelRepo.getById(novelId)?.let {
+                orientationOverride.value = it.readerOrientation.toInt()
+                entryTitle.value = it.title
+            }
         }
         open(initialChapterId)
     }

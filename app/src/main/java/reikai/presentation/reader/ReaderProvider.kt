@@ -1,6 +1,7 @@
 package reikai.presentation.reader
 
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * One content type's answers for the reader engine. The host is passed per call rather than held,
@@ -11,6 +12,12 @@ import eu.kanade.tachiyomi.ui.reader.ReaderActivity
  * appear in this file is a manga type.
  */
 interface ReaderProvider {
+
+    /**
+     * What the chrome shows for this entry. Neutral so the app bar renders the same way whichever
+     * content type is open, rather than the host reaching into one engine's model for a title.
+     */
+    val chrome: StateFlow<ReaderChromeState>
 
     /**
      * Builds the viewport for this content type. Called again whenever the shape changes, for

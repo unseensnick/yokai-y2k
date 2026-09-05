@@ -200,7 +200,7 @@ class ReaderActivity : BaseActivity() {
     // The provider is held here as its own type as well, because building page actions is a manga
     // question the neutral seam does not carry; it is stateless, so the engine surviving a recreate
     // with an earlier instance changes nothing.
-    private val mangaProvider by lazy { MangaReaderProvider(viewModel) }
+    private val mangaProvider by lazy { MangaReaderProvider(viewModel, lifecycleScope) }
 
     // Resolved after viewModel so the provider has a model to wrap. Manual assisted factories are a
     // plain function rather than a ViewModelProvider.Factory, which is what the initializer wraps.
@@ -227,7 +227,7 @@ class ReaderActivity : BaseActivity() {
     /** The novel half of the session, or null when this launch is a manga one. */
     private val novelSession: NovelReaderProvider? by lazy {
         (intent.entryId() as? EntryId.Novel)?.let {
-            NovelReaderProvider(novelViewModel, onToggleMenu = ::toggleMenu)
+            NovelReaderProvider(novelViewModel, lifecycleScope, onToggleMenu = ::toggleMenu)
         }
     }
 
@@ -690,6 +690,7 @@ class ReaderActivity : BaseActivity() {
     fun AppBars(state: ReaderViewModel.State) {
         val isHttpSource = state.source is HttpSource
         val viewport by engine.viewport.collectAsState()
+        val chrome by engine.chrome.collectAsState()
 
         val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
         val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
@@ -710,8 +711,9 @@ class ReaderActivity : BaseActivity() {
         ReaderAppBars(
             visible = state.menuVisible,
 
-            mangaTitle = state.manga?.title,
-            chapterTitle = state.visibleChapter?.chapter?.name,
+            // RK: from the engine, so the bar names the entry whichever content type is open.
+            mangaTitle = chrome.entryTitle,
+            chapterTitle = chrome.chapterTitle,
             navigateUp = onBackPressedDispatcher::onBackPressed,
             onClickTopAppBar = ::openMangaScreen,
             bookmarked = state.bookmarked,

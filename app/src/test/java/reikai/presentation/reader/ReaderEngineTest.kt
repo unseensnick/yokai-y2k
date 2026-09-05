@@ -6,11 +6,12 @@ import android.view.View
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Test
 
 class ReaderEngineTest {
 
-    private fun engine() = ReaderEngine(provider = FakeReaderProvider)
+    private fun engine(provider: FakeReaderProvider = FakeReaderProvider()) = ReaderEngine(provider)
 
     @Test
     fun `nothing is raised to begin with`() {
@@ -85,6 +86,20 @@ class ReaderEngineTest {
         actions.shared shouldBe true
     }
 
+    /**
+     * The chrome names the entry whichever content type is open, so the engine must pass the
+     * provider's answer through rather than hold one of its own that could go stale.
+     */
+    @Test
+    fun `the chrome comes from the provider`() {
+        val provider = FakeReaderProvider()
+        val engine = engine(provider)
+
+        provider.chrome.value = ReaderChromeState("Some Novel", "Chapter 2")
+
+        engine.chrome.value shouldBe ReaderChromeState("Some Novel", "Chapter 2")
+    }
+
     @Test
     fun `no viewport is installed to begin with`() {
         engine().viewport.value shouldBe null
@@ -132,7 +147,9 @@ class ReaderEngineTest {
  * The engine only ever holds the provider for the host to build through, and no test here builds a
  * viewport, so this never has to answer. Building is the half that needs a real Activity.
  */
-private object FakeReaderProvider : ReaderProvider {
+private class FakeReaderProvider : ReaderProvider {
+    override val chrome = MutableStateFlow(ReaderChromeState())
+
     override fun createViewport(host: ReaderActivity): ReaderViewport =
         error("a unit test never builds a viewport")
 }

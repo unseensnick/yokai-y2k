@@ -1,6 +1,11 @@
 package reikai.presentation.reader
 
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * The light-novel half of the reader's provider seam, over the live [NovelReaderViewModel] the host
@@ -9,8 +14,14 @@ import eu.kanade.tachiyomi.ui.reader.ReaderActivity
  */
 class NovelReaderProvider(
     val viewModel: NovelReaderViewModel,
+    scope: CoroutineScope,
     private val onToggleMenu: () -> Unit,
 ) : ReaderProvider {
+
+    override val chrome: StateFlow<ReaderChromeState> =
+        combine(viewModel.entryTitle, viewModel.chapter) { title, chapter ->
+            ReaderChromeState(title, chapter?.title)
+        }.stateIn(scope, SharingStarted.Eagerly, ReaderChromeState())
 
     /**
      * The volume-key values are read once, here, because the viewport takes them as plain values so it
