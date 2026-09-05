@@ -56,13 +56,17 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.reader.ReaderContentOverlay
 import eu.kanade.presentation.reader.appbars.ReaderTopBar
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences.Companion.ColorFilterMode
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import reikai.domain.novel.model.NovelChapter
 import reikai.domain.novel.tts.TtsPlayback
+import reikai.novel.download.toDownloadState
 import reikai.presentation.reader.ReaderActionRow
+import reikai.presentation.reader.ReaderChapterListDialog
+import reikai.presentation.reader.ReaderChapterRow
 import reikai.presentation.reader.ReaderOrientationDialog
 import reikai.presentation.reader.VerticalReaderRail
 import reikai.presentation.reader.readerBarEnter
@@ -509,22 +513,44 @@ class NovelReaderScreen(
             LaunchedEffect(chapters, downloadQueue) {
                 chapters?.let { downloadedChapterIds = screenModel.downloadedChapterIds(it) }
             }
-            NovelReaderChapterListDialog(
+            // The shared reader sheet, over rows this screen maps because its model predates the
+            // provider seam. Nothing here decides how a row looks.
+            val rows = remember(chapters, downloadQueue, downloadedChapterIds) {
+                chapters.orEmpty().map { ch ->
+                    ReaderChapterRow(
+                        id = ch.id,
+                        title = ch.name,
+                        subtitle = sourceNames[ch.novelId],
+                        dateUpload = ch.dateUpload,
+                        readProgress = (ch.lastTextProgress / 100L).toInt().takeIf { it > 0 }?.let { "$it%" },
+                        read = ch.read,
+                        bookmark = ch.bookmark,
+                        downloadState = when {
+                            downloadQueue.any { it.chapterId == ch.id } ->
+                                downloadQueue.first { it.chapterId == ch.id }.state.toDownloadState()
+                            ch.id in downloadedChapterIds -> Download.State.DOWNLOADED
+                            else -> Download.State.NOT_DOWNLOADED
+                        },
+                        downloadProgress = 0,
+                    )
+                }
+            }
+            val chaptersById = remember(chapters) { chapters.orEmpty().associateBy { it.id } }
+            ReaderChapterListDialog(
                 onDismissRequest = { chaptersOpen = false },
-                chapters = chapters,
-                sourceNames = sourceNames,
+                rows = rows,
                 currentChapterId = screenModel.currentChapterId(),
-                downloadQueue = downloadQueue,
-                downloadedChapterIds = downloadedChapterIds,
-                onClickChapter = { ch ->
-                    chaptersOpen = false
-                    screenModel.goToChapter(ch.id)
-                },
-                onBookmark = { ch, bookmarked -> screenModel.setChapterBookmark(ch.id, bookmarked) },
-                onMarkRead = { ch, read -> screenModel.setChapterReadStatus(ch, read) },
                 chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
                 chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
-                onDownloadAction = { ch, action -> screenModel.onChapterDownloadAction(ch, action) },
+                onClickChapter = { id ->
+                    chaptersOpen = false
+                    screenModel.goToChapter(id)
+                },
+                onMarkRead = { id, read -> chaptersById[id]?.let { screenModel.setChapterReadStatus(it, read) } },
+                onBookmark = { id, bookmarked -> screenModel.setChapterBookmark(id, bookmarked) },
+                onDownloadAction = { id, action ->
+                    chaptersById[id]?.let { screenModel.onChapterDownloadAction(it, action) }
+                },
             )
         }
 

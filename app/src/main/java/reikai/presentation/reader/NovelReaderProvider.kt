@@ -1,5 +1,6 @@
 package reikai.presentation.reader
 
+import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -44,6 +45,22 @@ class NovelReaderProvider(
     override suspend fun previousChapter() = viewModel.previousChapter()
 
     override suspend fun nextChapter() = viewModel.nextChapter()
+
+    override val chapterList: ReaderChapterList = object : ReaderChapterList {
+        override val rows: Flow<List<ReaderChapterRow>> = viewModel.chapterRows
+
+        override val currentChapterId: Flow<Long> = viewModel.chapter.map { it?.chapterId ?: -1L }
+
+        override fun open(chapterId: Long) = viewModel.open(chapterId)
+
+        override fun setRead(chapterId: Long, read: Boolean) = viewModel.setChapterRead(chapterId, read)
+
+        override fun setBookmark(chapterId: Long, bookmarked: Boolean) =
+            viewModel.setChapterBookmark(chapterId, bookmarked)
+
+        override fun download(chapterId: Long, action: ChapterDownloadAction) =
+            viewModel.downloadChapter(chapterId, action)
+    }
 
     override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }
 

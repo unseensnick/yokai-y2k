@@ -63,6 +63,9 @@ class ReaderEngine(
     // The step and the viewer's response to it are sequenced here, because the provider knows which
     // chapter is next and only the viewport can act on having arrived.
 
+    /** The chapter sheet's rows and verbs, for whichever content type this session is. */
+    val chapterList: ReaderChapterList get() = provider.chapterList
+
     fun previousChapter() = stepChapter { provider.previousChapter() }
 
     fun nextChapter() = stepChapter { provider.nextChapter() }

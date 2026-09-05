@@ -13,12 +13,17 @@ import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
 import eu.kanade.domain.source.interactor.GetIncognitoState
 import eu.kanade.domain.track.service.TrackPreferences
+import eu.kanade.presentation.manga.components.ChapterDownloadAction
+import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
 import reikai.domain.library.ReikaiLibraryPreferences
@@ -41,7 +46,9 @@ import reikai.domain.novel.model.readingOrderComparator
 import reikai.domain.novel.track.TrackNovelChapter
 import reikai.domain.reader.neighbourChapter
 import reikai.domain.reader.removeDuplicateChapters
+import reikai.novel.download.NovelDownload
 import reikai.novel.download.NovelDownloadManager
+import reikai.novel.download.toDownloadState
 import reikai.novel.install.LnPluginInstaller
 import reikai.novel.source.NovelSource
 import reikai.novel.source.NovelSourceManager
@@ -419,6 +426,83 @@ class NovelReaderViewModel(
             volumeButtonsInverted = novelPreferences.readerVolumeButtonsInverted().get(),
             volumeButtonsFraction = novelPreferences.readerVolumeButtonsFraction().get(),
         )
+    }
+
+    /**
+     * The chapter sheet's rows, in reading order. Cold, so the list is only built while the sheet is
+     * open, and re-emitted as downloads move or the reader changes chapter.
+     */
+    val chapterRows: Flow<List<ReaderChapterRow>> = flow {
+        if (orderedIds.isEmpty()) resolveReadingOrder()
+        val anchor = chapterRepo.getByNovelId(novelId).associateBy { it.id }
+        val chapters = orderedIds.mapNotNull { id -> anchor[id] ?: chapterRepo.getById(id) }
+        val sourceNames = chapterSourceNames(chapters)
+        emitAll(
+            combine(downloadManager.queueState, loadedChapter) { queue, _ ->
+                val downloaded = downloadedChapterIds(chapters)
+                chapters.map { it.toRow(sourceNames, queue, downloaded) }
+            },
+        )
+    }
+
+    private fun NovelChapter.toRow(
+        sourceNames: Map<Long, String>,
+        queue: List<NovelDownload>,
+        downloaded: Set<Long>,
+    ) = ReaderChapterRow(
+        id = id,
+        title = name,
+        // A novel has no scanlator, so the only subtitle is which source a merged group's chapter is from.
+        subtitle = sourceNames[novelId],
+        dateUpload = dateUpload,
+        readProgress = (lastTextProgress / 100L).toInt().takeIf { it > 0 }?.let { "$it%" },
+        read = read,
+        bookmark = bookmark,
+        downloadState = when {
+            queue.any { it.chapterId == id } -> queue.first { it.chapterId == id }.state.toDownloadState()
+            id in downloaded -> Download.State.DOWNLOADED
+            else -> Download.State.NOT_DOWNLOADED
+        },
+        // A novel chapter is one request, so there is no percentage to report while it runs.
+        downloadProgress = 0,
+    )
+
+    /** Per-source display names keyed by novelId, for a merged novel's source labels. Empty for a
+     *  single-source novel, so no label is drawn. */
+    private suspend fun chapterSourceNames(chapters: List<NovelChapter>): Map<Long, String> {
+        val novelIds = chapters.map { it.novelId }.distinct()
+        if (novelIds.size <= 1) return emptyMap()
+        return novelIds.associateWith { id ->
+            sourcesByNovel[id]?.name
+                ?: novelRepo.getById(id)?.source?.let { sourceManager.get(it)?.name ?: it }
+                ?: ""
+        }
+    }
+
+    fun setChapterRead(chapterId: Long, read: Boolean) {
+        viewModelScope.launchIO {
+            chapterRepo.getById(chapterId)?.let { setNovelReadStatus.await(read, listOf(it)) }
+        }
+    }
+
+    fun setChapterBookmark(chapterId: Long, bookmarked: Boolean) {
+        viewModelScope.launchIO { chapterRepo.setBookmark(chapterId, bookmarked) }
+    }
+
+    /** Start, cancel or delete a chapter download from the sheet, mirroring the details model. */
+    fun downloadChapter(chapterId: Long, action: ChapterDownloadAction) {
+        viewModelScope.launchIO {
+            val chapter = chapterRepo.getById(chapterId) ?: return@launchIO
+            when (action) {
+                ChapterDownloadAction.START -> downloadManager.downloadChapters(listOf(chapter))
+                ChapterDownloadAction.START_NOW -> {
+                    downloadManager.downloadChapters(listOf(chapter))
+                    downloadManager.startDownloadNow(chapter.id)
+                }
+                ChapterDownloadAction.CANCEL -> downloadManager.cancelDownloads(listOf(chapter.id))
+                ChapterDownloadAction.DELETE -> downloadManager.deleteChapters(listOf(chapter))
+            }
+        }
     }
 
     /**

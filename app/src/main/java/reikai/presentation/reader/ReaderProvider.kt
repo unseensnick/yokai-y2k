@@ -39,6 +39,9 @@ interface ReaderProvider {
 
     suspend fun nextChapter()
 
+    /** The chapter sheet's rows and its verbs, which every content type has. */
+    val chapterList: ReaderChapterList
+
     /**
      * The entry's own rotation flag, a [eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation]
      * `flagValue` where 0 means follow that content type's global default. Both types store one per

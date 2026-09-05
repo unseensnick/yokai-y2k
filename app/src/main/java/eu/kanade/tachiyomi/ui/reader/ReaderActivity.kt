@@ -49,7 +49,6 @@ import com.google.android.material.transition.platform.MaterialContainerTransfor
 import dev.zacsweers.metro.Inject
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.presentation.reader.ChapterListDialog
 import eu.kanade.presentation.reader.DisplayRefreshHost
 import eu.kanade.presentation.reader.ReaderContentOverlay
 import eu.kanade.presentation.reader.ReaderPageActionsDialog
@@ -85,7 +84,6 @@ import eu.kanade.tachiyomi.util.system.readerBackgroundColor
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -109,6 +107,7 @@ import reikai.presentation.reader.MangaViewport
 import reikai.presentation.reader.NovelReaderProvider
 import reikai.presentation.reader.NovelReaderViewModel
 import reikai.presentation.reader.NovelWebViewport
+import reikai.presentation.reader.ReaderChapterListDialog
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
 import reikai.presentation.reader.ReaderOrientationDialog
@@ -202,7 +201,7 @@ class ReaderActivity : BaseActivity() {
     // The provider is held here as its own type as well, because building page actions is a manga
     // question the neutral seam does not carry; it is stateless, so the engine surviving a recreate
     // with an earlier instance changes nothing.
-    private val mangaProvider by lazy { MangaReaderProvider(viewModel, readerPreferences) }
+    private val mangaProvider by lazy { MangaReaderProvider(viewModel, readerPreferences, graph.downloadManager) }
 
     // Resolved after viewModel so the provider has a model to wrap. Manual assisted factories are a
     // plain function rather than a ViewModelProvider.Factory, which is what the initializer wraps.
@@ -495,21 +494,24 @@ class ReaderActivity : BaseActivity() {
                     )
                 }
                 // RK -->
+                // RK: over the session's own chapter list, so a novel gets its chapters here too.
                 is ReaderDialog.ChapterList -> {
-                    val chapters = remember { viewModel.getChapters().toImmutableList() }
-                    ChapterListDialog(
+                    val chapterList = engine.chapterList
+                    val rows by chapterList.rows.collectAsState(emptyList())
+                    val current by chapterList.currentChapterId.collectAsState(-1L)
+                    ReaderChapterListDialog(
                         onDismissRequest = onDismissRequest,
-                        chapters = chapters,
-                        onClickChapter = {
-                            viewModel.loadNewChapterFromDialog(it)
-                            onDismissRequest()
-                        },
-                        onBookmark = { chapter, bookmarked -> viewModel.toggleBookmark(chapter.id, bookmarked) },
-                        onMarkRead = { chapter, read -> viewModel.setChapterReadStatus(chapter, read) },
+                        rows = rows,
+                        currentChapterId = current,
                         chapterSwipeStartAction = viewModel.chapterSwipeStartAction,
                         chapterSwipeEndAction = viewModel.chapterSwipeEndAction,
-                        onDownloadAction = viewModel::handleChapterDownload,
-                        dateRelativeTime = uiPreferences.relativeTime.get(),
+                        onClickChapter = {
+                            chapterList.open(it)
+                            onDismissRequest()
+                        },
+                        onMarkRead = chapterList::setRead,
+                        onBookmark = chapterList::setBookmark,
+                        onDownloadAction = chapterList::download,
                     )
                 }
                 // RK <--

@@ -3,6 +3,7 @@ package reikai.presentation.reader
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import io.kotest.matchers.shouldBe
@@ -283,8 +284,25 @@ private class FakeReaderProvider : ReaderProvider {
         keepScreenOn.value = enabled
     }
 
+    override val chapterList: ReaderChapterList = FakeChapterList()
+
     override fun createViewport(host: ReaderActivity): ReaderViewport =
         error("a unit test never builds a viewport")
+}
+
+/** The engine only hands this through, so it answers nothing beyond the type. */
+private class FakeChapterList : ReaderChapterList {
+    override val rows = MutableStateFlow(emptyList<ReaderChapterRow>())
+
+    override val currentChapterId = MutableStateFlow(-1L)
+
+    override fun open(chapterId: Long) = Unit
+
+    override fun setRead(chapterId: Long, read: Boolean) = Unit
+
+    override fun setBookmark(chapterId: Long, bookmarked: Boolean) = Unit
+
+    override fun download(chapterId: Long, action: ChapterDownloadAction) = Unit
 }
 
 private class FakeViewport : ReaderViewport {

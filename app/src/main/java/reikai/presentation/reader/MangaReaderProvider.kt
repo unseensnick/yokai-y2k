@@ -1,8 +1,12 @@
 package reikai.presentation.reader
 
 import eu.kanade.domain.manga.model.readerOrientation
+import eu.kanade.presentation.manga.components.ChapterDownloadAction
+import eu.kanade.tachiyomi.data.download.DownloadManager
+import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderViewModel
+import eu.kanade.tachiyomi.ui.reader.chapter.ReaderChapterItem
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
@@ -10,6 +14,10 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.sample
+import tachiyomi.source.local.isLocal
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Manga's answers, over the live [ReaderViewModel] the host already resolved. It stays Mihon's and
@@ -18,6 +26,7 @@ import kotlinx.coroutines.flow.map
 class MangaReaderProvider(
     private val viewModel: ReaderViewModel,
     private val readerPreferences: ReaderPreferences,
+    private val downloadManager: DownloadManager,
 ) : ReaderProvider {
 
     // The visible chapter rather than the active one: they differ mid-scroll across a boundary, and
@@ -47,6 +56,67 @@ class MangaReaderProvider(
     override suspend fun previousChapter() = viewModel.loadPreviousChapter()
 
     override suspend fun nextChapter() = viewModel.loadNextChapter()
+
+    override val chapterList: ReaderChapterList = object : ReaderChapterList {
+
+        // Rebuilt on every queue change, and while something is downloading on a sampled tick, so a row
+        // spins without the sheet rebuilding on every frame the download reports.
+        override val rows: Flow<List<ReaderChapterRow>> = combine(
+            downloadManager.queueState,
+            downloadManager.progressFlow().sample(PROGRESS_SAMPLE).map<Download, Any?> { it }.onStart { emit(null) },
+        ) { queue, _ -> viewModel.getChapters().map { it.toRow(queue) } }
+
+        override val currentChapterId: Flow<Long> =
+            viewModel.state.map { it.currentChapter?.chapter?.id ?: -1L }
+
+        override fun open(chapterId: Long) {
+            viewModel.getChapters().find { it.chapter.id == chapterId }
+                ?.let { viewModel.loadNewChapterFromDialog(it.chapter) }
+        }
+
+        override fun setRead(chapterId: Long, read: Boolean) {
+            chapterOf(chapterId)?.let { viewModel.setChapterReadStatus(it, read) }
+        }
+
+        override fun setBookmark(chapterId: Long, bookmarked: Boolean) =
+            viewModel.toggleBookmark(chapterId, bookmarked)
+
+        override fun download(chapterId: Long, action: ChapterDownloadAction) {
+            chapterOf(chapterId)?.let { viewModel.handleChapterDownload(it, action) }
+        }
+
+        private fun chapterOf(chapterId: Long) =
+            viewModel.getChapters().find { it.chapter.id == chapterId }?.chapter
+    }
+
+    private fun ReaderChapterItem.toRow(queue: List<Download>): ReaderChapterRow {
+        val active = queue.find { it.chapter.id == chapter.id }
+        val downloaded = manga.isLocal() || downloadManager.isChapterDownloaded(
+            chapter.name,
+            chapter.scanlator,
+            chapter.url,
+            manga.title,
+            manga.source,
+        )
+        return ReaderChapterRow(
+            id = chapter.id,
+            title = chapter.name,
+            // In a merged group the source leads, then the scanlator, so a unified list says where each
+            // chapter came from.
+            subtitle = listOfNotNull(sourceName, chapter.scanlator).joinToString(" • ").ifEmpty { null },
+            dateUpload = chapter.dateUpload,
+            // The page a manga chapter was left on is not shown here, as upstream does not show it.
+            readProgress = null,
+            read = chapter.read,
+            bookmark = chapter.bookmark,
+            downloadState = when {
+                active != null -> active.status
+                downloaded -> Download.State.DOWNLOADED
+                else -> Download.State.NOT_DOWNLOADED
+            },
+            downloadProgress = active?.progress ?: 0,
+        )
+    }
 
     // Unresolved, because the picker's "use default" action has to be able to tell a series following
     // the default from one pinned to the same value the default happens to be.
@@ -81,3 +151,7 @@ class MangaReaderProvider(
         override fun setAsCover() = viewModel.setAsCover(page)
     }
 }
+
+/** How often a running download refreshes the sheet. Rebuilding the whole list on every reported frame
+ *  would recompose it many times a second for a spinner that cannot show that detail. */
+private val PROGRESS_SAMPLE = 500.milliseconds
