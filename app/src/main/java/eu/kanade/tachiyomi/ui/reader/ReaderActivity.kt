@@ -102,6 +102,7 @@ import logcat.LogPriority
 import mihon.app.di.AppGraph
 import mihon.core.metro.metroGraph
 import reikai.domain.entry.EntryId
+import reikai.domain.novel.NovelPreferences
 import reikai.domain.reader.pageIndex
 import reikai.presentation.novel.reader.buildReaderHtml
 import reikai.presentation.novel.reader.resolvedForSystemTheme
@@ -190,6 +191,8 @@ class ReaderActivity : BaseActivity() {
 
     // RK -->
     @Inject private lateinit var uiPreferences: UiPreferences
+
+    @Inject private lateinit var novelPreferences: NovelPreferences
     // RK <--
 
     lateinit var binding: ReaderActivityBinding
@@ -200,7 +203,7 @@ class ReaderActivity : BaseActivity() {
     // The provider is held here as its own type as well, because building page actions is a manga
     // question the neutral seam does not carry; it is stateless, so the engine surviving a recreate
     // with an earlier instance changes nothing.
-    private val mangaProvider by lazy { MangaReaderProvider(viewModel, lifecycleScope) }
+    private val mangaProvider by lazy { MangaReaderProvider(viewModel, readerPreferences, lifecycleScope) }
 
     // Resolved after viewModel so the provider has a model to wrap. Manual assisted factories are a
     // plain function rather than a ViewModelProvider.Factory, which is what the initializer wraps.
@@ -227,7 +230,7 @@ class ReaderActivity : BaseActivity() {
     /** The novel half of the session, or null when this launch is a manga one. */
     private val novelSession: NovelReaderProvider? by lazy {
         (intent.entryId() as? EntryId.Novel)?.let {
-            NovelReaderProvider(novelViewModel, lifecycleScope, onToggleMenu = ::toggleMenu)
+            NovelReaderProvider(novelViewModel, novelPreferences, lifecycleScope, onToggleMenu = ::toggleMenu)
         }
     }
 
@@ -704,9 +707,8 @@ class ReaderActivity : BaseActivity() {
         val verticalNavigatorOnLeft by readerPreferences.verticalNavigatorOnLeft.collectAsState()
         val verticalNavigatorHeight by readerPreferences.verticalNavigatorHeight.collectAsState()
 
-        // RK -->
-        val bottomButtons by readerPreferences.readerBottomButtons.collectAsState()
-        // RK <--
+        // RK: from the engine, so a novel session offers its own actions rather than manga's.
+        val bottomButtons by engine.bottomButtons.collectAsState()
 
         ReaderAppBars(
             visible = state.menuVisible,

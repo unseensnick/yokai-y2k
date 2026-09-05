@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import reikai.domain.novel.NovelPreferences
 
 /**
  * The light-novel half of the reader's provider seam, over the live [NovelReaderViewModel] the host
@@ -14,9 +15,12 @@ import kotlinx.coroutines.flow.stateIn
  */
 class NovelReaderProvider(
     val viewModel: NovelReaderViewModel,
+    novelPreferences: NovelPreferences,
     scope: CoroutineScope,
     private val onToggleMenu: () -> Unit,
 ) : ReaderProvider {
+
+    override val bottomButtons: StateFlow<Set<String>> = novelPreferences.readerBottomButtons().stateIn(scope)
 
     override val chrome: StateFlow<ReaderChromeState> =
         combine(viewModel.entryTitle, viewModel.chapter) { title, chapter ->

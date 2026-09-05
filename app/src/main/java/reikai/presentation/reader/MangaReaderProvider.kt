@@ -3,6 +3,7 @@ package reikai.presentation.reader
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderViewModel
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,8 +18,11 @@ import kotlinx.coroutines.flow.stateIn
  */
 class MangaReaderProvider(
     private val viewModel: ReaderViewModel,
+    readerPreferences: ReaderPreferences,
     scope: CoroutineScope,
 ) : ReaderProvider {
+
+    override val bottomButtons: StateFlow<Set<String>> = readerPreferences.readerBottomButtons.stateIn(scope)
 
     // The visible chapter rather than the active one: they differ mid-scroll across a boundary, and
     // pairing a title from one with a page count from the other is the chrome tear.

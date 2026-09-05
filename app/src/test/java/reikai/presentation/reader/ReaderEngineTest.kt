@@ -100,6 +100,20 @@ class ReaderEngineTest {
         engine.chrome.value shouldBe ReaderChromeState("Some Novel", "Chapter 2")
     }
 
+    /**
+     * The bar used to render manga's stored selection in every session, so a novel reader offered
+     * reading mode and crop borders. The engine asking the provider is what stops that.
+     */
+    @Test
+    fun `the bottom bar buttons come from the provider`() {
+        val provider = FakeReaderProvider()
+        val engine = engine(provider)
+
+        provider.bottomButtons.value = setOf("as", "th")
+
+        engine.bottomButtons.value shouldBe setOf("as", "th")
+    }
+
     @Test
     fun `no viewport is installed to begin with`() {
         engine().viewport.value shouldBe null
@@ -149,6 +163,8 @@ class ReaderEngineTest {
  */
 private class FakeReaderProvider : ReaderProvider {
     override val chrome = MutableStateFlow(ReaderChromeState())
+
+    override val bottomButtons = MutableStateFlow(emptySet<String>())
 
     override fun createViewport(host: ReaderActivity): ReaderViewport =
         error("a unit test never builds a viewport")
