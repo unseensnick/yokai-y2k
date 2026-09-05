@@ -403,6 +403,12 @@ class ReaderViewModel(
     private val downloadAheadAmount = downloadPreferences.autoDownloadWhileReading.get()
 
     init {
+        // RK: this collector has to be subscribed before the first chapter arrives, because the
+        // three image viewers read currChapter.requestedPage directly the moment setChapters reaches
+        // them. A page stamped after that is a page they never see, and the chapter silently opens at
+        // its start instead of where the reader left it. It wins today only because launchIn runs
+        // here during construction, ahead of the init() call below, so do not move it behind a lazy
+        // or WhileSubscribed flow.
         // To save state
         state.map { it.viewerChapters?.currChapter }
             .distinctUntilChanged()
@@ -977,6 +983,11 @@ class ReaderViewModel(
             setMangaViewerFlags.awaitSetReadingMode(manga.id, readingMode.flagValue.toLong())
             val currChapters = state.value.viewerChapters
             if (currChapters != null) {
+                // RK: the update below re-emits this same ViewerChapters instance, which the
+                // distinctUntilChanged in front of both the stamping collector above and the
+                // activity's viewerChapters collector swallows. So the event sent afterwards is the
+                // only thing that reaches the viewer, and the page has to be stamped by hand here
+                // because the collector that normally does it never runs.
                 // Save current page
                 val currChapter = currChapters.currChapter
                 currChapter.requestedPage = currChapter.chapter.last_page_read
@@ -1013,6 +1024,7 @@ class ReaderViewModel(
             setMangaViewerFlags.awaitSetOrientation(manga.id, orientation.flagValue.toLong())
             val currChapters = state.value.viewerChapters
             if (currChapters != null) {
+                // RK: same re-emit and hand-stamp as setMangaReadingMode, for the same reason.
                 // Save current page
                 val currChapter = currChapters.currChapter
                 currChapter.requestedPage = currChapter.chapter.last_page_read

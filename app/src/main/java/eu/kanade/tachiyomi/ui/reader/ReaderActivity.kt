@@ -227,6 +227,11 @@ class ReaderActivity : BaseActivity() {
             .onEach(::setProgressDialog)
             .launchIn(lifecycleScope)
 
+        // RK: registration order is load-bearing. This collector is what installs the viewer, and
+        // the viewerChapters one below delivers into it. Registered the other way round, setChapters
+        // drops the loading indicator and then delivers into a null viewer, leaving a black screen
+        // with no spinner and no error. It also rests on init() setting manga before viewerChapters,
+        // which nothing enforces.
         viewModel.state
             .map { it.manga }
             .distinctUntilChanged()
@@ -687,6 +692,8 @@ class ReaderActivity : BaseActivity() {
      */
     @SuppressLint("RestrictedApi")
     private fun setChapters(viewerChapters: ViewerChapters) {
+        // RK: the indicator goes whether or not a viewer exists to receive the chapters, so this is
+        // safe only under the collector ordering noted where the two are registered.
         binding.readerContainer.removeView(loadingIndicator)
         viewModel.state.value.viewer?.setChapters(viewerChapters)
 
