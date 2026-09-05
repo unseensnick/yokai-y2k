@@ -1,5 +1,6 @@
 package reikai.presentation.reader
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.zacsweers.metro.AppScope
@@ -10,6 +11,8 @@ import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Provider
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
+import eu.kanade.domain.source.interactor.GetIncognitoState
+import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,10 +22,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
 import reikai.domain.novel.NovelChapterRepository
+import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
+import reikai.domain.novel.interactor.SetNovelReadStatus
+import reikai.domain.novel.interactor.UpsertNovelHistory
 import reikai.domain.novel.model.NovelChapter
+import reikai.domain.novel.model.NovelHistoryUpdate
 import reikai.domain.novel.model.readerOrientation
+import reikai.domain.novel.track.TrackNovelChapter
 import reikai.novel.download.NovelDownloadManager
 import reikai.novel.install.LnPluginInstaller
 import reikai.novel.source.NovelSource
@@ -30,6 +38,7 @@ import reikai.novel.source.NovelSourceManager
 import reikai.presentation.novel.reader.NovelReaderSettings
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.library.service.LibraryPreferences
 
 /**
  * The light-novel provider model under the shared reader host: reader display settings, and the raw
@@ -48,6 +57,16 @@ class NovelReaderViewModel(
     private val installer: LnPluginInstaller,
     private val novelPreferences: NovelPreferences,
     private val downloadManagerProvider: Provider<NovelDownloadManager>,
+    private val upsertNovelHistory: UpsertNovelHistory,
+    private val setNovelReadStatus: SetNovelReadStatus,
+    // Merge-group resolution + the shared "mark duplicate read" pref, for marking same-numbered
+    // chapters across a merged novel's sources read on completion (parity with the manga reader).
+    private val mergeManager: NovelMergeManager,
+    private val libraryPreferences: LibraryPreferences,
+    private val trackNovelChapter: TrackNovelChapter,
+    private val trackPreferences: TrackPreferences,
+    private val getIncognitoState: GetIncognitoState,
+    private val context: Context,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -69,6 +88,21 @@ class NovelReaderViewModel(
     /** [LnPluginInstaller.ensureLoaded] needs to run once before the first source resolve. */
     @Volatile
     private var pluginsLoaded = false
+
+    /** Captured whenever a chapter opens (mirrors ReaderViewModel). Global-only: novel sources are
+     *  String-keyed with no installed extension, so per-source incognito (await(sourceId)) can't apply. */
+    @Volatile
+    private var incognitoMode: Boolean = false
+
+    /** Owning novel of the current chapter. Defaults to the host (== owner for a standalone novel);
+     *  a merged session re-points it per chapter so the last-read stamp lands on the source read. */
+    @Volatile
+    private var currentNovelId: Long = novelId
+
+    /** When the current chapter began being read, for the novel-history session duration (the analog of
+     *  ReaderViewModel.chapterReadStartTime). Reset whenever a chapter loads. */
+    @Volatile
+    private var chapterReadStartTime: Long? = null
 
     /** Per-novel reader orientation override (a [ReaderOrientation] flagValue; 0 = follow the global
      *  default). Keyed on the opened entry [novelId] (the anchor for a merged novel), since orientation
@@ -188,7 +222,10 @@ class NovelReaderViewModel(
     fun open(chapterId: Long) {
         viewModelScope.launchIO {
             try {
+                incognitoMode = getIncognitoState.await(null)
                 val row = chapterRepo.getById(chapterId) ?: error("Chapter not found: $chapterId")
+                currentNovelId = row.novelId
+                chapterReadStartTime = System.currentTimeMillis()
                 val (html, baseUrl) = loadChapterHtml(row)
                 loadedChapter.value = LoadedChapter(
                     chapterId = row.id,
@@ -205,6 +242,59 @@ class NovelReaderViewModel(
                 logcat(LogPriority.ERROR, e) { "Failed to load novel chapter $chapterId" }
             }
         }
+    }
+
+    /** Persist the reader's scroll position. The web layer reports a whole percent (0..100); store it
+     *  as 0..10000 to match [NovelChapter.lastTextProgress]. Reaching the end auto-marks read. */
+    fun saveProgress(percent: Int) {
+        if (incognitoMode) return
+        val id = loadedChapter.value?.chapterId ?: return
+        val clamped = percent.coerceIn(0, 100)
+        viewModelScope.launchIO {
+            chapterRepo.setLastTextProgress(id, clamped * 100L)
+            // Stamp the owning novel's last-read time so the LastRead library sort reflects this read.
+            novelRepo.setLastReadAt(currentNovelId, System.currentTimeMillis())
+            if (clamped >= 97) {
+                // Fetch before marking so the shared interactor sees the chapter as still unread; it flips
+                // read + honors "delete after marked as read".
+                val chapter = chapterRepo.getById(id)
+                // Mark same-numbered unread chapters across the merged group read too, mirroring the
+                // manga reader (ReaderViewModel.updateChapterProgressOnComplete), gated on the shared
+                // markDuplicateReadChapterAsRead pref. relatedIdsList returns just this novel when
+                // it isn't merged, so a single-source read is unchanged.
+                val markDupes = libraryPreferences.markDuplicateReadChapterAsRead.get()
+                    .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
+                val toMark = if (chapter != null && markDupes) {
+                    val siblings = mergeManager.relatedIdsList(novelId)
+                        .takeIf { it.size > 1 }
+                        ?.flatMap { chapterRepo.getByNovelId(it) }
+                        ?.filter {
+                            it.id != id && !it.read && it.chapterNumber >= 0.0 &&
+                                it.chapterNumber == chapter.chapterNumber
+                        }
+                        .orEmpty()
+                    listOf(chapter) + siblings
+                } else {
+                    listOfNotNull(chapter)
+                }
+                setNovelReadStatus.await(true, toMark)
+                // push read progress to bound trackers, mirroring ReaderViewModel.updateTrackChapterRead
+                if (trackPreferences.autoUpdateTrack.get()) {
+                    chapter?.let { trackNovelChapter.await(context, currentNovelId, it.chapterNumber) }
+                }
+            }
+        }
+    }
+
+    /** Stamp the current chapter into novel history and accumulate this session's read time. Called on
+     *  chapter switch and on leaving the reader (the novel twin of ReaderViewModel.updateHistory). */
+    suspend fun updateHistory() {
+        if (incognitoMode) return
+        val id = loadedChapter.value?.chapterId ?: return
+        val now = System.currentTimeMillis()
+        val duration = chapterReadStartTime?.let { now - it } ?: 0L
+        upsertNovelHistory.await(NovelHistoryUpdate(id, now, duration))
+        chapterReadStartTime = null
     }
 
     private fun currentSettings(): NovelReaderSettings {

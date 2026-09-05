@@ -584,7 +584,9 @@ class ReaderActivity : BaseActivity() {
 
     override fun onPause() {
         lifecycleScope.launchNonCancellable {
-            viewModel.updateHistory()
+            // RK: whichever session this is writes its own history row; the manga model has nothing
+            // to write for a novel launch, where it was never given an entry.
+            novelSession?.viewModel?.updateHistory() ?: viewModel.updateHistory()
         }
         super.onPause()
     }

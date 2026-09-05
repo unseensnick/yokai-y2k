@@ -24,11 +24,10 @@ class NovelReaderProvider(
             volumeKeysEnabled = settings.useVolumeButtons,
             volumeKeysInverted = settings.volumeButtonsInverted,
             volumeKeyScrollFraction = settings.volumeButtonsFraction,
-            // Both are unconsumed until the host owns novel chrome and reading progress. Progress is
-            // one behaviour, not two: the stored position, the history row, tracking and the
-            // mark-as-read threshold all hang off the settled percent, so they arrive together.
+            // Live progress has no consumer until the host owns novel chrome; the settled percent is
+            // the one that persists, and it carries mark-as-read and trackers with it.
             onProgressChanged = {},
-            onProgressSettled = {},
+            onProgressSettled = viewModel::saveProgress,
             onToggleMenu = onToggleMenu,
         )
     }
