@@ -308,6 +308,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 **Reader & chapters**
 
 - **A merged series now opens in webtoon mode when any of its sources calls it a manhwa, manhua or webtoon.** Before, only the source the chapter came from was consulted, and that is usually not the one carrying the tag.
+- **Picking a chapter from the manga reader's chapter list now actually opens it when the high quality renderer is on.** The title and page count changed but the pages on screen stayed on the chapter you came from, so the tap looked like it did nothing.
 - **Chapters you have read no longer disappear from the reader's chapter list.**
 - **Rotating the screen while a chapter is opening no longer leaves the reader stuck loading (synced from Mihon, mihonapp/mihon#3686).**
 - **Swiping back from the reader now reaches the chapter you were on.**

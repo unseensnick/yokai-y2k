@@ -1300,8 +1300,25 @@ open class WebGpuViewer(
         val requestedIndex = min(chapters.currChapter.requestedPage, pages.lastIndex)
         val requestedPage = pages[requestedIndex]
 
+        // RK --> a chapter the reader jumped to has to beat the page already on screen. Keeping the
+        // anchor unconditionally left the old chapter rendered while the model, the app bar and the
+        // page count moved on, so picking a chapter from the list did nothing visible. Scrolling
+        // into the next chapter is not a jump: there the page on screen already belongs to the new
+        // chapter, so it still wins and the reader does not lurch. Upstream has the same defect.
+        val anchor = when (val current = currentPage) {
+            null -> null
+            is ViewerReaderPage -> current.takeIf {
+                it.page.chapter.chapter.id == chapters.currChapter.chapter.id
+            }
+            else -> current.takeIf {
+                it.prevChapter?.chapter?.id == chapters.currChapter.chapter.id ||
+                    it.nextChapter?.chapter?.id == chapters.currChapter.chapter.id
+            }
+        }
+
         // Get the page and align to spread anchor if needed
-        val page = currentPage ?: getPage(requestedPage)
+        val page = anchor ?: getPage(requestedPage)
+        // RK <--
         currentPage = getSpreadAnchor(page)
         (currentPage as? ViewerReaderPage)?.let { activity.onPageSelected(it.page) }
         preloadPages(currentPage!!)
