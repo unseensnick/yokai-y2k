@@ -33,6 +33,12 @@ interface ReaderProvider {
      */
     val navigator: Flow<ReaderNavigatorState>
 
+    /** Steps a chapter. Both types resolve their own neighbour, since what is next depends on the
+     *  reading order and skip settings of that type's own chapter list. */
+    suspend fun previousChapter()
+
+    suspend fun nextChapter()
+
     /**
      * The entry's own rotation flag, a [eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation]
      * `flagValue` where 0 means follow that content type's global default. Both types store one per

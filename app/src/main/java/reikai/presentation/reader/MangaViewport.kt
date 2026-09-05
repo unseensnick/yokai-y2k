@@ -32,6 +32,12 @@ class MangaViewport(
         viewer.moveToPage(page)
     }
 
+    // Upstream starts a stepped-to chapter at its first page rather than where it was last left, so a
+    // deliberate step lands somewhere predictable.
+    override fun onChapterStepped() {
+        pageAt(0)?.let(viewer::moveToPage)
+    }
+
     // The two viewer families spell right-to-left differently, and this is the one place that knows.
     override val isRtl: Boolean
         get() = viewer is R2LPagerViewer || (viewer as? WebGpuViewer)?.isReversed == true

@@ -31,6 +31,12 @@ interface ReaderViewport {
      */
     fun seekTo(progress: ChapterProgress)
 
+    /**
+     * The session has stepped to another chapter. A viewer that keeps one long view of many chapters
+     * needs telling where the new one starts; a viewer that re-renders per chapter already knows.
+     */
+    fun onChapterStepped()
+
     fun destroy()
 
     fun handleKeyEvent(event: KeyEvent): Boolean

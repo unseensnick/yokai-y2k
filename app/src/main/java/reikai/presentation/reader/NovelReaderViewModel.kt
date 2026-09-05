@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
+import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelPreferences
@@ -29,9 +31,16 @@ import reikai.domain.novel.interactor.SetNovelReadStatus
 import reikai.domain.novel.interactor.SetNovelViewerFlags
 import reikai.domain.novel.interactor.UpsertNovelHistory
 import reikai.domain.novel.model.NovelChapter
+import reikai.domain.novel.model.NovelChapterFlags
 import reikai.domain.novel.model.NovelHistoryUpdate
+import reikai.domain.novel.model.effectiveBookmarkedFilter
+import reikai.domain.novel.model.effectiveDownloadedFilter
+import reikai.domain.novel.model.effectiveReadFilter
 import reikai.domain.novel.model.readerOrientation
+import reikai.domain.novel.model.readingOrderComparator
 import reikai.domain.novel.track.TrackNovelChapter
+import reikai.domain.reader.neighbourChapter
+import reikai.domain.reader.removeDuplicateChapters
 import reikai.novel.download.NovelDownloadManager
 import reikai.novel.install.LnPluginInstaller
 import reikai.novel.source.NovelSource
@@ -40,6 +49,7 @@ import reikai.presentation.novel.reader.NovelReaderSettings
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
+import java.util.Collections
 
 /**
  * The light-novel provider model under the shared reader host: reader display settings, and the raw
@@ -64,6 +74,7 @@ class NovelReaderViewModel(
     // chapters across a merged novel's sources read on completion (parity with the manga reader).
     private val mergeManager: NovelMergeManager,
     private val libraryPreferences: LibraryPreferences,
+    private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
     private val trackNovelChapter: TrackNovelChapter,
     private val trackPreferences: TrackPreferences,
     private val getIncognitoState: GetIncognitoState,
@@ -110,14 +121,6 @@ class NovelReaderViewModel(
      *  default). Keyed on the opened entry [novelId] (the anchor for a merged novel), since orientation
      *  is a book-level preference like sort/filter rather than per-source progress. */
     private val orientationOverride = MutableStateFlow(ReaderOrientation.DEFAULT.flagValue)
-
-    init {
-        // The override is persisted on the entry, so read it back before the first frame locks the
-        // window to whatever the global default says.
-        viewModelScope.launchIO {
-            novelRepo.getById(novelId)?.let { orientationOverride.value = it.readerOrientation.toInt() }
-        }
-    }
 
     fun setOrientation(flagValue: Int) {
         orientationOverride.value = flagValue
@@ -240,28 +243,78 @@ class NovelReaderViewModel(
         liveProgress.value = percent.coerceIn(0, 100)
     }
 
+    /** The chapter being read, which a merged session moves across sources. */
+    @Volatile
+    private var currentChapterId: Long = initialChapterId
+
+    /** Every chapter this session can reach, in reading order, duplicates and hidden ones already gone. */
+    @Volatile
+    private var orderedIds: List<Long> = emptyList()
+
+    /** Which of [orderedIds] a forward step may land on, per the skip settings. A back step ignores it,
+     *  so the chapter just finished stays reachable from the one after it. */
+    @Volatile
+    private var forwardEligibleIds: Set<Long> = emptySet()
+
+    private val neighbours = MutableStateFlow(Neighbours())
+
+    /** What the navigator's chapter buttons enable on. */
+    val chapterNeighbours: StateFlow<Neighbours> = neighbours
+
+    data class Neighbours(val previous: Long? = null, val next: Long? = null)
+
+    /** Chapters warmed by the forward prefetch, newest first, so a forward step renders without a
+     *  round trip. Bounded, because a long session would otherwise hold every chapter it has read. */
+    private val htmlCache: MutableMap<Long, Pair<String, String?>> = Collections.synchronizedMap(
+        object : LinkedHashMap<Long, Pair<String, String?>>(MAX_CACHED_CHAPTERS + 1, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Pair<String, String?>>) =
+                size > MAX_CACHED_CHAPTERS
+        },
+    )
+
     init {
-        // Seed the per-novel orientation from the opened entry (the anchor for a merged novel), which
-        // is what the eager seed above cannot read without a DB hit.
         viewModelScope.launchIO {
             novelRepo.getById(novelId)?.let {
                 orientationOverride.value = it.readerOrientation.toInt()
                 entryTitle.value = it.title
             }
         }
-        open(initialChapterId)
+        load()
     }
 
-    /** Load [chapterId] into [chapter]. A missing row, an uninstalled source or a parse failure leaves
-     *  the state as it was, so the host keeps rendering instead of tearing down. */
+    /** Jump to [chapterId] from the chapter list. A no-op on the chapter already open. */
     fun open(chapterId: Long) {
+        if (chapterId == currentChapterId && loadedChapter.value != null) return
+        goTo(chapterId)
+    }
+
+    /** Forward only, so it is the step that can mark the departed chapter read. */
+    fun nextChapter() = neighbours.value.next?.let { goTo(it, markDepartedRead = true) } ?: Unit
+
+    fun previousChapter() = neighbours.value.previous?.let { goTo(it) } ?: Unit
+
+    private fun goTo(chapterId: Long, markDepartedRead: Boolean = false) {
+        viewModelScope.launchIO {
+            // The departed chapter is stamped into history before the switch, and marked read while it
+            // and its owning novel are still the current ones.
+            updateHistory()
+            if (markDepartedRead) markReadOnSkip(currentChapterId, currentNovelId)
+            currentChapterId = chapterId
+            load()
+        }
+    }
+
+    /** A missing row, an uninstalled source or a parse failure leaves the state as it was, so the host
+     *  keeps rendering instead of tearing down. */
+    private fun load() {
         viewModelScope.launchIO {
             try {
                 incognitoMode = getIncognitoState.await(null)
-                val row = chapterRepo.getById(chapterId) ?: error("Chapter not found: $chapterId")
+                if (orderedIds.isEmpty()) resolveReadingOrder()
+                val row = chapterRepo.getById(currentChapterId) ?: error("Chapter not found: $currentChapterId")
                 currentNovelId = row.novelId
                 chapterReadStartTime = System.currentTimeMillis()
-                val (html, baseUrl) = loadChapterHtml(row)
+                val (html, baseUrl) = htmlCache[row.id] ?: loadChapterHtml(row).also { htmlCache[row.id] = it }
                 loadedChapter.value = LoadedChapter(
                     chapterId = row.id,
                     title = row.name,
@@ -270,11 +323,12 @@ class NovelReaderViewModel(
                     // Stored as 0..10000 (hundredths of a percent); the web layer wants 0..100.
                     progressPercent = (row.lastTextProgress / 100).coerceIn(0L, 100L).toInt(),
                 ).also { liveProgress.value = it.progressPercent }
+                resolveNeighbours()
             } catch (e: Throwable) {
                 // Leaving the reader cancels this scope, and swallowing that would report a load
                 // failure for a chapter nobody is waiting for any more.
                 if (e is CancellationException) throw e
-                logcat(LogPriority.ERROR, e) { "Failed to load novel chapter $chapterId" }
+                logcat(LogPriority.ERROR, e) { "Failed to load novel chapter $currentChapterId" }
             }
         }
     }
@@ -367,6 +421,179 @@ class NovelReaderViewModel(
         )
     }
 
+    /**
+     * Builds the order the reader pages in, once per session. Source scope walks the opened novel's own
+     * chapters; group scope aggregates the merge group, so History, Updates and the library need not
+     * pass a list. A group-scoped chapter can be deduped out of the unified list, so it is put back
+     * (placed by chapter number) rather than leaving prev and next with nowhere to step from.
+     */
+    private suspend fun resolveReadingOrder() {
+        val resolved = if (sourceScoped) {
+            dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())).map { it.id }
+        } else {
+            val chapters = resolveGroupChapters()
+            val withCurrent = if (chapters.any { it.id == currentChapterId }) {
+                chapters
+            } else {
+                val current = chapterRepo.getById(currentChapterId)
+                if (current == null) chapters else (chapters + current).sortedWith(readingOrder())
+            }
+            withCurrent.map { it.id }
+        }
+        orderedIds = filterHiddenChapters(resolved)
+        forwardEligibleIds = resolveForwardEligible(orderedIds)
+    }
+
+    /** The opened novel's own chapter sort, always ascending, so paging follows the order the user chose
+     *  on its chapter list. The manga reader resolves the same way. */
+    private suspend fun readingOrder(): Comparator<NovelChapter> {
+        val novel = novelRepo.getById(novelId)
+        return if (novel == null) compareBy { it.chapterNumber } else readingOrderComparator(novel, novelPreferences)
+    }
+
+    /** The merge group's unified chapters, the novel twin of `MergedChapterProvider`. A non-merged novel
+     *  is just its own. The global preferred-source ranking picks the trunk, as details and library do. */
+    private suspend fun resolveGroupChapters(): List<NovelChapter> {
+        val ids = mergeManager.relatedIdsList(novelId)
+        if (ids.size <= 1) return chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())
+        val byNovel = ids.associateWith { chapterRepo.getByNovelId(it) }
+        val sourceIdByNovel = ids.associateWith { novelRepo.getById(it)?.source.orEmpty() }
+        val aggregated = NovelChapterAggregation.aggregate(
+            byNovel,
+            sourceIdByNovel,
+            reikaiLibraryPreferences.preferredNovelSources.get(),
+            mergeManager.overrideRankingMemberIds(novelId),
+        ).sortedWith(readingOrder())
+        return dedupIfEnabled(aggregated, sourceIdByNovel)
+    }
+
+    /**
+     * Drops same-numbered duplicates from the list rather than stepping over them, so the chapter list,
+     * download-ahead and delete-after-read all count what the reader actually shows. A novel has no
+     * scanlator, so its source stands in as the origin the current chapter prefers.
+     */
+    private fun dedupIfEnabled(
+        chapters: List<NovelChapter>,
+        sourceIdByNovel: Map<Long, String> = emptyMap(),
+    ): List<NovelChapter> {
+        if (!novelPreferences.readerSkipDuplicateChapters().get()) return chapters
+        val current = chapters.find { it.id == currentChapterId } ?: return chapters
+        return chapters.removeDuplicateChapters(
+            current,
+            numberOf = { it.chapterNumber },
+            idOf = { it.id },
+            originOf = { sourceIdByNovel[it.novelId] },
+        )
+    }
+
+    /** Drops user-hidden chapters so paging matches the details list. The open chapter is always kept,
+     *  so opening a hidden one directly still resolves. The key mirrors the details screen. */
+    private suspend fun filterHiddenChapters(ids: List<Long>): List<Long> {
+        val hidden = novelPreferences.hiddenChapters().get()
+        if (hidden.isEmpty()) return ids
+        val anchor = chapterRepo.getByNovelId(novelId).associateBy { it.id }
+        val sourceIdByNovel = HashMap<Long, String>()
+        return ids.filter { id ->
+            if (id == currentChapterId) return@filter true
+            val chapter = anchor[id] ?: chapterRepo.getById(id) ?: return@filter true
+            val sourceId = sourceIdByNovel.getOrPut(chapter.novelId) {
+                novelRepo.getById(chapter.novelId)?.source.orEmpty()
+            }
+            "$sourceId|${chapter.url}" !in hidden
+        }
+    }
+
+    /**
+     * Which chapters a forward step may stop on. "Skip read" drops read ones; "skip filtered" drops the
+     * ones this novel's own chapter-list filters hide, which is what makes the setting mean the same
+     * thing here as on the details screen. The open chapter stays eligible either way.
+     */
+    private suspend fun resolveForwardEligible(ids: List<Long>): Set<Long> {
+        val skipRead = novelPreferences.readerSkipRead().get()
+        val skipFiltered = novelPreferences.readerSkipFiltered().get()
+        if (!skipRead && !skipFiltered) return ids.toSet()
+        val novel = novelRepo.getById(novelId) ?: return ids.toSet()
+        val chapters = ids.mapNotNull { chapterRepo.getById(it) }
+        val downloaded = if (skipFiltered) downloadedChapterIds(chapters) else emptySet()
+        val readFilter = novel.effectiveReadFilter(novelPreferences)
+        val bookmarkFilter = novel.effectiveBookmarkedFilter(novelPreferences)
+        val downloadFilter = novel.effectiveDownloadedFilter(novelPreferences)
+        return chapters.filterTo(HashSet()) { ch ->
+            when {
+                ch.id == currentChapterId -> true
+                skipRead && ch.read -> false
+                !skipFiltered -> true
+                readFilter == NovelChapterFlags.SHOW_UNREAD && ch.read -> false
+                readFilter == NovelChapterFlags.SHOW_READ && !ch.read -> false
+                bookmarkFilter == NovelChapterFlags.SHOW_BOOKMARKED && !ch.bookmark -> false
+                bookmarkFilter == NovelChapterFlags.SHOW_NOT_BOOKMARKED && ch.bookmark -> false
+                downloadFilter == NovelChapterFlags.SHOW_DOWNLOADED && ch.id !in downloaded -> false
+                downloadFilter == NovelChapterFlags.SHOW_NOT_DOWNLOADED && ch.id in downloaded -> false
+                else -> true
+            }
+        }.mapTo(HashSet()) { it.id }
+    }
+
+    private suspend fun downloadedChapterIds(chapters: List<NovelChapter>): Set<Long> {
+        val novelsById = chapters.map { it.novelId }.distinct().mapNotNull { novelRepo.getById(it) }
+            .associateBy { it.id }
+        return chapters
+            .filter { ch -> novelsById[ch.novelId]?.let { downloadManager.isChapterDownloaded(it, ch) } == true }
+            .mapTo(HashSet()) { it.id }
+    }
+
+    /** Re-resolves both neighbours, then warms the next chapter and queues the download-ahead window. */
+    private suspend fun resolveNeighbours() {
+        val index = orderedIds.indexOf(currentChapterId)
+        neighbours.value = Neighbours(
+            previous = orderedIds.neighbourChapter(index, forward = false) { it in forwardEligibleIds },
+            next = orderedIds.neighbourChapter(index, forward = true) { it in forwardEligibleIds },
+        )
+        prefetchNext()
+        maybeDownloadAhead()
+    }
+
+    /** One speculative request per chapter open, so a forward step is instant and the source is not hit
+     *  harder than a reader moving through it would. */
+    private fun prefetchNext() {
+        val nextId = neighbours.value.next ?: return
+        if (htmlCache.containsKey(nextId)) return
+        viewModelScope.launchIO {
+            runCatching {
+                val next = chapterRepo.getById(nextId) ?: return@launchIO
+                htmlCache[nextId] = loadChapterHtml(next)
+            }
+        }
+    }
+
+    /** Enqueues the next N un-downloaded chapters in reading order, the novel twin of manga's
+     *  autoDownloadWhileReading. Off in incognito and when the setting is zero. */
+    private suspend fun maybeDownloadAhead() {
+        if (incognitoMode) return
+        val ahead = novelPreferences.autoDownloadWhileReading().get()
+        if (ahead <= 0) return
+        val index = orderedIds.indexOf(currentChapterId)
+        if (index < 0) return
+        val toDownload = orderedIds.drop(index + 1).take(ahead)
+            .mapNotNull { chapterRepo.getById(it) }
+            .filterNot { ch ->
+                val novel = novelRepo.getById(ch.novelId) ?: return@filterNot false
+                downloadManager.isChapterDownloaded(novel, ch)
+            }
+        if (toDownload.isNotEmpty()) downloadManager.downloadChapters(toDownload)
+    }
+
+    /** Marks the chapter the user skipped away from as read, forward only, when the setting is on. */
+    private suspend fun markReadOnSkip(departedId: Long, departedNovelId: Long) {
+        if (incognitoMode || !novelPreferences.readerMarkReadOnSkip().get()) return
+        val chapter = chapterRepo.getById(departedId) ?: return
+        if (chapter.read) return
+        chapterRepo.setReadBulk(listOf(departedId), true)
+        if (trackPreferences.autoUpdateTrack.get()) {
+            trackNovelChapter.await(context, departedNovelId, chapter.chapterNumber)
+        }
+    }
+
     /** Downloaded chapter -> read the self-contained HTML from disk (no source, null base URL, images
      *  already inlined). Otherwise resolve the chapter's source and parse live, using the source site
      *  as the base URL so relative image URLs resolve. */
@@ -432,3 +659,7 @@ class NovelReaderViewModel(
         val resolved: Int get() = if (override == ReaderOrientation.DEFAULT.flagValue) default else override
     }
 }
+
+/** Chapters held in the forward-prefetch cache. Small: it exists to make one step instant, not to
+ *  keep a session's reading in memory. */
+private const val MAX_CACHED_CHAPTERS = 5

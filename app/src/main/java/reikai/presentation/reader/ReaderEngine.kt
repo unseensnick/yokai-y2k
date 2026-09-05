@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import reikai.domain.reader.ChapterProgress
 
 /**
@@ -57,6 +58,20 @@ class ReaderEngine(
     /** Scrubbing goes to the viewport rather than the provider, since only it can move the reader. */
     fun seek(progress: ChapterProgress) {
         viewport.value?.seekTo(progress)
+    }
+
+    // The step and the viewer's response to it are sequenced here, because the provider knows which
+    // chapter is next and only the viewport can act on having arrived.
+
+    fun previousChapter() = stepChapter { provider.previousChapter() }
+
+    fun nextChapter() = stepChapter { provider.nextChapter() }
+
+    private fun stepChapter(step: suspend () -> Unit) {
+        viewModelScope.launch {
+            step()
+            viewport.value?.onChapterStepped()
+        }
     }
 
     // The bar's own verbs, so a button acts on the entry that is open rather than on a manga model

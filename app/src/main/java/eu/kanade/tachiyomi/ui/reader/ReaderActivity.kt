@@ -649,10 +649,10 @@ class ReaderActivity : BaseActivity() {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_N) {
-            loadNextChapter()
+            engine.nextChapter()
             return true
         } else if (keyCode == KeyEvent.KEYCODE_P) {
-            loadPreviousChapter()
+            engine.previousChapter()
             return true
         }
         return super.onKeyUp(keyCode, event)
@@ -744,10 +744,10 @@ class ReaderActivity : BaseActivity() {
                 }
             },
             verticalNavigatorHeight = navigator.railHeightPercent / 100f,
-            onNextChapter = ::loadNextChapter,
-            enabledNext = state.viewerChapters?.nextChapter != null,
-            onPreviousChapter = ::loadPreviousChapter,
-            enabledPrevious = state.viewerChapters?.prevChapter != null,
+            onNextChapter = engine::nextChapter,
+            enabledNext = navigator.hasNext,
+            onPreviousChapter = engine::previousChapter,
+            enabledPrevious = navigator.hasPrevious,
             progress = navigator.progress,
             onSeek = {
                 isScrollingThroughPages = true
@@ -921,40 +921,6 @@ class ReaderActivity : BaseActivity() {
             engine.openDialog(ReaderDialog.Loading)
         } else {
             engine.dismissDialog()
-        }
-    }
-
-    /**
-     * Moves the viewer to the given page [index]. It does nothing if the viewer is null or the
-     * page is not found.
-     */
-    private fun moveToPageIndex(index: Int) {
-        // RK: unwrapped for the same reason as chapter delivery, since ReaderPage is manga-shaped.
-        val viewer = (engine.viewport.value as? MangaViewport)?.viewer ?: return
-        val currentChapter = viewModel.state.value.currentChapter ?: return
-        val page = currentChapter.pages?.getOrNull(index) ?: return
-        viewer.moveToPage(page)
-    }
-
-    /**
-     * Tells the presenter to load the next chapter and mark it as active. The progress dialog
-     * should be automatically shown.
-     */
-    private fun loadNextChapter() {
-        lifecycleScope.launch {
-            viewModel.loadNextChapter()
-            moveToPageIndex(0)
-        }
-    }
-
-    /**
-     * Tells the presenter to load the previous chapter and mark it as active. The progress dialog
-     * should be automatically shown.
-     */
-    private fun loadPreviousChapter() {
-        lifecycleScope.launch {
-            viewModel.loadPreviousChapter()
-            moveToPageIndex(0)
         }
     }
 

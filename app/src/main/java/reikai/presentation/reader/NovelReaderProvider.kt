@@ -26,15 +26,24 @@ class NovelReaderProvider(
 
     // Always the rail: a chapter is one continuous page, so there is nothing for a horizontal bar to
     // step through. Hundredths, because that is the unit the stored progress is in.
-    override val navigator: Flow<ReaderNavigatorState> =
-        combine(viewModel.progressPercent, viewModel.settings) { percent, settings ->
-            ReaderNavigatorState(
-                progress = ChapterProgress.Percent(percent * 100L),
-                useRail = true,
-                railOnLeft = settings.railOnLeft,
-                railHeightPercent = settings.railHeightPercent,
-            )
-        }
+    override val navigator: Flow<ReaderNavigatorState> = combine(
+        viewModel.progressPercent,
+        viewModel.settings,
+        viewModel.chapterNeighbours,
+    ) { percent, settings, neighbours ->
+        ReaderNavigatorState(
+            progress = ChapterProgress.Percent(percent * 100L),
+            useRail = true,
+            railOnLeft = settings.railOnLeft,
+            railHeightPercent = settings.railHeightPercent,
+            hasPrevious = neighbours.previous != null,
+            hasNext = neighbours.next != null,
+        )
+    }
+
+    override suspend fun previousChapter() = viewModel.previousChapter()
+
+    override suspend fun nextChapter() = viewModel.nextChapter()
 
     override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }
 

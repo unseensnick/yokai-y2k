@@ -74,6 +74,9 @@ class NovelWebViewport(
         webView.scrollTo(0, (webView.maxScroll * progress.fraction).roundToInt())
     }
 
+    // Nothing to do: a step reloads the document, which starts at that chapter's own stored position.
+    override fun onChapterStepped() = Unit
+
     override fun destroy() {
         webView.stopLoading()
         // The bridge captures the host and is called off the main thread, so drop it before teardown.

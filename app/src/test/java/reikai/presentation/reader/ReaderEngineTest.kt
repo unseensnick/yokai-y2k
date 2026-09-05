@@ -179,6 +179,33 @@ class ReaderEngineTest {
         engine().seek(ChapterProgress.Percent(4200L))
     }
 
+    /**
+     * The viewer is told after the step, not before: a viewer that keeps one long view of several
+     * chapters would otherwise be pointed at the chapter it is leaving.
+     */
+    @Test
+    fun `stepping a chapter tells the session first and then the viewport`() {
+        val provider = FakeReaderProvider()
+        val engine = engine(provider)
+        val viewport = FakeViewport()
+        engine.installViewport(viewport)
+
+        engine.nextChapter()
+
+        provider.stepped shouldBe 1
+        viewport.chapterSteps shouldBe 1
+    }
+
+    @Test
+    fun `stepping back goes back`() {
+        val provider = FakeReaderProvider()
+        val engine = engine(provider)
+
+        engine.previousChapter()
+
+        provider.stepped shouldBe -1
+    }
+
     @Test
     fun `no viewport is installed to begin with`() {
         engine().viewport.value shouldBe null
@@ -241,6 +268,17 @@ private class FakeReaderProvider : ReaderProvider {
         orientation.value = flagValue
     }
 
+    var stepped = 0
+        private set
+
+    override suspend fun previousChapter() {
+        stepped--
+    }
+
+    override suspend fun nextChapter() {
+        stepped++
+    }
+
     override fun setKeepScreenOn(enabled: Boolean) {
         keepScreenOn.value = enabled
     }
@@ -267,6 +305,13 @@ private class FakeViewport : ReaderViewport {
     override fun handleKeyEvent(event: KeyEvent) = false
 
     override fun handleGenericMotionEvent(event: MotionEvent) = false
+
+    var chapterSteps = 0
+        private set
+
+    override fun onChapterStepped() {
+        chapterSteps++
+    }
 
     override fun seekTo(progress: ChapterProgress) {
         sought = progress

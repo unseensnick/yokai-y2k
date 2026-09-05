@@ -14,4 +14,7 @@ data class ReaderNavigatorState(
     val useRail: Boolean = false,
     val railOnLeft: Boolean = false,
     val railHeightPercent: Int = 100,
+    /** Whether a chapter is reachable in each direction, which is what enables the step buttons. */
+    val hasPrevious: Boolean = false,
+    val hasNext: Boolean = false,
 )

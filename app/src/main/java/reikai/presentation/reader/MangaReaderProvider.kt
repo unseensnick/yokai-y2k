@@ -39,8 +39,14 @@ class MangaReaderProvider(
             useRail = ReadingMode.fromPreference(viewModel.getMangaReadingMode()) in railModes,
             railOnLeft = onLeft,
             railHeightPercent = height,
+            hasPrevious = state.viewerChapters?.prevChapter != null,
+            hasNext = state.viewerChapters?.nextChapter != null,
         )
     }
+
+    override suspend fun previousChapter() = viewModel.loadPreviousChapter()
+
+    override suspend fun nextChapter() = viewModel.loadNextChapter()
 
     // Unresolved, because the picker's "use default" action has to be able to tell a series following
     // the default from one pinned to the same value the default happens to be.
