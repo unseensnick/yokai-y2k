@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import reikai.domain.novel.NovelPreferences
+import reikai.domain.reader.ChapterProgress
 
 /**
  * The light-novel half of the reader's provider seam, over the live [NovelReaderViewModel] the host
@@ -22,6 +23,18 @@ class NovelReaderProvider(
         }
 
     override val bottomButtons: Flow<Set<String>> = novelPreferences.readerBottomButtons().changes()
+
+    // Always the rail: a chapter is one continuous page, so there is nothing for a horizontal bar to
+    // step through. Hundredths, because that is the unit the stored progress is in.
+    override val navigator: Flow<ReaderNavigatorState> =
+        combine(viewModel.progressPercent, viewModel.settings) { percent, settings ->
+            ReaderNavigatorState(
+                progress = ChapterProgress.Percent(percent * 100L),
+                useRail = true,
+                railOnLeft = settings.railOnLeft,
+                railHeightPercent = settings.railHeightPercent,
+            )
+        }
 
     override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }
 
@@ -43,9 +56,9 @@ class NovelReaderProvider(
             volumeKeysEnabled = settings.useVolumeButtons,
             volumeKeysInverted = settings.volumeButtonsInverted,
             volumeKeyScrollFraction = settings.volumeButtonsFraction,
-            // Live progress has no consumer until the host owns novel chrome; the settled percent is
-            // the one that persists, and it carries mark-as-read and trackers with it.
-            onProgressChanged = {},
+            // The live percent drives the navigator; the settled one persists, and it carries
+            // mark-as-read and the tracker push with it.
+            onProgressChanged = viewModel::reportProgress,
             onProgressSettled = viewModel::saveProgress,
             // Taken from the host being built against rather than held, so a reader rebuilt after a
             // rotation toggles the live Activity's menu instead of the destroyed one's.

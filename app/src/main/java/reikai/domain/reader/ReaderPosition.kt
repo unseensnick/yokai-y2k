@@ -21,6 +21,9 @@ private const val CONTINUOUS_COMPLETE_AT = 9700L
 /** Hundredths of a percent in a whole one. */
 private const val HUNDREDTHS_FULL = 10000L
 
+/** Detents on a continuous chapter's rail, the count the novel reader has always drawn. */
+private const val CONTINUOUS_DETENTS = 33
+
 /**
  * Whether the chapter counts as read. A paged chapter finishes on its last page, which for a
  * one-page chapter is the page it opens on; a continuous one cannot finish on entry, which is why a
@@ -49,7 +52,9 @@ val ChapterProgress.fraction: Float
 val ChapterProgress.stepCount: Int
     get() = when (this) {
         is ChapterProgress.Pages -> (pageCount - 2L).coerceAtLeast(0L).toInt()
-        is ChapterProgress.Percent -> 0
+        // A percentage has no natural unit to detent on, so it keeps the count the novel rail has
+        // always drawn. Scrubbing freely instead loses the marks that say the rail is a progress bar.
+        is ChapterProgress.Percent -> CONTINUOUS_DETENTS
     }
 
 /** Whether a chapter can be scrubbed at all. A single page has nowhere to scrub to. */

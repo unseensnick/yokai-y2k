@@ -27,6 +27,13 @@ interface ReaderProvider {
     val bottomButtons: Flow<Set<String>>
 
     /**
+     * Where the reader is in the open chapter and which navigator shows it. Both are the session's to
+     * answer: a novel scrolls one continuous page, so it always uses the rail, while manga offers it
+     * per reading mode.
+     */
+    val navigator: Flow<ReaderNavigatorState>
+
+    /**
      * The entry's own rotation flag, a [eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation]
      * `flagValue` where 0 means follow that content type's global default. Both types store one per
      * entry, so the bar icon and the picker read it here rather than from a model.

@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -26,6 +27,21 @@ class MangaReaderProvider(
 
     override val bottomButtons: Flow<Set<String>> = readerPreferences.readerBottomButtons.changes()
 
+    override val navigator: Flow<ReaderNavigatorState> = combine(
+        viewModel.state,
+        readerPreferences.verticalNavigator.changes(),
+        readerPreferences.verticalNavigatorOnLeft.changes(),
+        readerPreferences.verticalNavigatorHeight.changes(),
+    ) { state, railModes, onLeft, height ->
+        ReaderNavigatorState(
+            progress = state.position?.progress,
+            // The resolved mode, so a series on auto-webtoon gets the rail its actual mode asks for.
+            useRail = ReadingMode.fromPreference(viewModel.getMangaReadingMode()) in railModes,
+            railOnLeft = onLeft,
+            railHeightPercent = height,
+        )
+    }
+
     // Unresolved, because the picker's "use default" action has to be able to tell a series following
     // the default from one pinned to the same value the default happens to be.
     override val orientation: Flow<Int> = viewModel.state
@@ -41,7 +57,10 @@ class MangaReaderProvider(
     // Resolved rather than read off the stored flag, because auto-webtoon overrides a series to long
     // strip at open time without writing the preference.
     override fun createViewport(host: ReaderActivity): ReaderViewport =
-        MangaViewport(ReadingMode.toViewer(viewModel.getMangaReadingMode(), host))
+        MangaViewport(
+            viewer = ReadingMode.toViewer(viewModel.getMangaReadingMode(), host),
+            pageAt = { index -> viewModel.state.value.currentChapter?.pages?.getOrNull(index) },
+        )
 
     /**
      * Binds the page-action verbs to one page, so the dialog carries a capability rather than a

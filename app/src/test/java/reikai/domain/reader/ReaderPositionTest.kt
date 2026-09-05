@@ -98,9 +98,10 @@ class ReaderPositionTest {
         ChapterProgress.Pages(lastPageRead = 0, pageCount = 0).stepCount shouldBe 0
     }
 
+    /** The detents are the marks that read as a progress rail; the novel reader has always had them. */
     @Test
-    fun `a continuous chapter scrubs freely rather than in detents`() {
-        ChapterProgress.Percent(hundredths = 0).stepCount shouldBe 0
+    fun `a continuous chapter keeps the rail's detents`() {
+        ChapterProgress.Percent(hundredths = 0).stepCount shouldBe 33
     }
 
     @Test

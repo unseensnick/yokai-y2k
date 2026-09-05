@@ -228,6 +228,18 @@ class NovelReaderViewModel(
     private val loadedChapter = MutableStateFlow<LoadedChapter?>(null)
     val chapter: StateFlow<LoadedChapter?> = loadedChapter
 
+    private val liveProgress = MutableStateFlow(0)
+
+    /**
+     * How far down the open chapter the reader is, as a whole percent. Reported on every scroll frame,
+     * which is what the navigator follows; [saveProgress] is the settled one that persists.
+     */
+    val progressPercent: StateFlow<Int> = liveProgress
+
+    fun reportProgress(percent: Int) {
+        liveProgress.value = percent.coerceIn(0, 100)
+    }
+
     init {
         // Seed the per-novel orientation from the opened entry (the anchor for a merged novel), which
         // is what the eager seed above cannot read without a DB hit.
@@ -257,7 +269,7 @@ class NovelReaderViewModel(
                     baseUrl = baseUrl,
                     // Stored as 0..10000 (hundredths of a percent); the web layer wants 0..100.
                     progressPercent = (row.lastTextProgress / 100).coerceIn(0L, 100L).toInt(),
-                )
+                ).also { liveProgress.value = it.progressPercent }
             } catch (e: Throwable) {
                 // Leaving the reader cancels this scope, and swallowing that would report a load
                 // failure for a chapter nobody is waiting for any more.

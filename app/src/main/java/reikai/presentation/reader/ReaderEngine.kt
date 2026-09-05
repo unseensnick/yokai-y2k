@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import reikai.domain.reader.ChapterProgress
 
 /**
  * The Reikai-owned reader engine, above one provider per content type. It owns dialog dispatch and
@@ -48,6 +49,15 @@ class ReaderEngine(
     /** The bottom-bar buttons this session offers, likewise its own rather than manga's. */
     val bottomButtons: StateFlow<Set<String>> =
         provider.bottomButtons.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Where the reader is in the chapter, and which navigator shows it. */
+    val navigator: StateFlow<ReaderNavigatorState> =
+        provider.navigator.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderNavigatorState())
+
+    /** Scrubbing goes to the viewport rather than the provider, since only it can move the reader. */
+    fun seek(progress: ChapterProgress) {
+        viewport.value?.seekTo(progress)
+    }
 
     // The bar's own verbs, so a button acts on the entry that is open rather than on a manga model
     // the session may not have.

@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import reikai.domain.reader.ChapterProgress
 
 class ReaderEngineTest {
 
@@ -158,6 +159,26 @@ class ReaderEngineTest {
         engine.keepScreenOn.value shouldBe true
     }
 
+    /**
+     * The scrub reaches the installed viewport carrying the session's own unit, so a percentage can
+     * never arrive somewhere that would read it as a page number.
+     */
+    @Test
+    fun `seeking moves the installed viewport`() {
+        val engine = engine()
+        val viewport = FakeViewport()
+        engine.installViewport(viewport)
+
+        engine.seek(ChapterProgress.Percent(4200L))
+
+        viewport.sought shouldBe ChapterProgress.Percent(4200L)
+    }
+
+    @Test
+    fun `seeking with no viewport installed does nothing`() {
+        engine().seek(ChapterProgress.Percent(4200L))
+    }
+
     @Test
     fun `no viewport is installed to begin with`() {
         engine().viewport.value shouldBe null
@@ -214,6 +235,8 @@ private class FakeReaderProvider : ReaderProvider {
 
     override val keepScreenOn = MutableStateFlow(false)
 
+    override val navigator = MutableStateFlow(ReaderNavigatorState())
+
     override fun setOrientation(flagValue: Int) {
         orientation.value = flagValue
     }
@@ -227,6 +250,9 @@ private class FakeReaderProvider : ReaderProvider {
 }
 
 private class FakeViewport : ReaderViewport {
+    var sought: ChapterProgress? = null
+        private set
+
     var destroyed = false
         private set
 
@@ -241,6 +267,10 @@ private class FakeViewport : ReaderViewport {
     override fun handleKeyEvent(event: KeyEvent) = false
 
     override fun handleGenericMotionEvent(event: MotionEvent) = false
+
+    override fun seekTo(progress: ChapterProgress) {
+        sought = progress
+    }
 }
 
 private class RecordingPageActions : ReaderPageActions {

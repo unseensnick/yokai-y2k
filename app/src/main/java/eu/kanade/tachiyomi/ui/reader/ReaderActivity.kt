@@ -102,7 +102,6 @@ import mihon.app.di.AppGraph
 import mihon.core.metro.metroGraph
 import reikai.domain.entry.EntryId
 import reikai.domain.novel.NovelPreferences
-import reikai.domain.reader.pageIndex
 import reikai.presentation.novel.reader.buildReaderHtml
 import reikai.presentation.novel.reader.resolvedForSystemTheme
 import reikai.presentation.reader.MangaReaderProvider
@@ -709,15 +708,9 @@ class ReaderActivity : BaseActivity() {
         val isPagerType = ReadingMode.isPagerType(viewModel.getMangaReadingMode())
         val cropEnabled = if (isPagerType) cropBorderPaged else cropBorderWebtoon
 
-        val verticalNavigatorModes by readerPreferences.verticalNavigator.collectAsState()
-        val verticalNavigator = verticalNavigatorModes.contains(
-            ReadingMode.fromPreference(viewModel.getMangaReadingMode()),
-        )
-        val verticalNavigatorOnLeft by readerPreferences.verticalNavigatorOnLeft.collectAsState()
-        val verticalNavigatorHeight by readerPreferences.verticalNavigatorHeight.collectAsState()
-
         // RK: from the engine, so a novel session offers its own actions rather than manga's.
         val bottomButtons by engine.bottomButtons.collectAsState()
+        val navigator by engine.navigator.collectAsState()
         val orientation by engine.orientation.collectAsState()
         val keepScreenOn by engine.keepScreenOn.collectAsState()
 
@@ -735,30 +728,30 @@ class ReaderActivity : BaseActivity() {
             onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
             onShare = ::shareChapter.takeIf { isHttpSource },
 
-            chapterNavigatorType = if (!verticalNavigator) {
-                // RK: asked of the contract, so the host no longer instance-checks manga viewers to
-                // learn which way a reader runs.
+            // RK: the shape is the session's answer, and the direction is asked of the viewer
+            // contract, so the host neither reads manga's preference nor instance-checks a viewer.
+            chapterNavigatorType = if (!navigator.useRail) {
                 if (viewport?.isRtl == true) {
                     ChapterNavigatorType.HORIZONTAL_RTL
                 } else {
                     ChapterNavigatorType.HORIZONTAL_LTR
                 }
             } else {
-                if (verticalNavigatorOnLeft) {
+                if (navigator.railOnLeft) {
                     ChapterNavigatorType.VERTICAL_LEFT
                 } else {
                     ChapterNavigatorType.VERTICAL_RIGHT
                 }
             },
-            verticalNavigatorHeight = verticalNavigatorHeight / 100f,
+            verticalNavigatorHeight = navigator.railHeightPercent / 100f,
             onNextChapter = ::loadNextChapter,
             enabledNext = state.viewerChapters?.nextChapter != null,
             onPreviousChapter = ::loadPreviousChapter,
             enabledPrevious = state.viewerChapters?.prevChapter != null,
-            progress = state.position?.progress,
+            progress = navigator.progress,
             onSeek = {
                 isScrollingThroughPages = true
-                it.pageIndex?.let(::moveToPageIndex)
+                engine.seek(it)
             },
             onSeekFinished = {
                 isScrollingThroughPages = false

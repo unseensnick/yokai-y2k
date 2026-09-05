@@ -12,7 +12,10 @@ import android.webkit.WebView
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import logcat.logcat
+import reikai.domain.reader.ChapterProgress
+import reikai.domain.reader.fraction
 import reikai.presentation.novel.reader.NovelReaderWebInterface
+import kotlin.math.roundToInt
 
 /**
  * The light-novel adapter under [ReaderViewport], rendering a chapter document with the bundled
@@ -35,7 +38,7 @@ class NovelWebViewport(
     // Bridge messages arrive on a WebView background thread, so UI-affecting callbacks marshal here.
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val webView = WebView(context).apply {
+    private val webView = ProgressWebView(context).apply {
         setDefaultSettings()
         // file:///android_asset bundled CSS/JS + fonts. The dangerous universal/file-from-file access
         // flags stay off (security): the chapter HTML is loaded over an http base URL.
@@ -63,6 +66,13 @@ class NovelWebViewport(
     // A novel chapter is one vertically scrolling document, so there is no right-to-left shape to report.
     override val isRtl: Boolean
         get() = false
+
+    // Scrolled natively rather than through JS, so the thumb and the text move together while the rail
+    // is being dragged. A paged progress is not this medium's unit and is ignored.
+    override fun seekTo(progress: ChapterProgress) {
+        if (progress !is ChapterProgress.Percent) return
+        webView.scrollTo(0, (webView.maxScroll * progress.fraction).roundToInt())
+    }
 
     override fun destroy() {
         webView.stopLoading()
@@ -107,4 +117,11 @@ class NovelWebViewport(
     private companion object {
         const val JS_INTERFACE_NAME = "NativeReader"
     }
+}
+
+/** Exposes the vertical scroll range, which `WebView` keeps protected, so a scrub can land natively. */
+@SuppressLint("ViewConstructor")
+private class ProgressWebView(context: Context) : WebView(context) {
+    val maxScroll: Int
+        get() = (computeVerticalScrollRange() - computeVerticalScrollExtent()).coerceAtLeast(0)
 }
