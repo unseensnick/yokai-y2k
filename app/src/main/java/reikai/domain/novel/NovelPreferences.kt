@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 import reikai.domain.novel.model.NovelMigrationFlag
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.getEnum
 import tachiyomi.domain.library.service.LibraryPreferences
 
 /**
@@ -130,6 +131,13 @@ class NovelPreferences(
      *  reader's `defaultOrientationType`. Stores a [ReaderOrientation] `flagValue`. */
     fun readerDefaultOrientation() =
         preferenceStore.getInt("ln_reader_default_orientation", ReaderOrientation.FREE.flagValue)
+
+    /**
+     * Which reader a novel opens in. Defaults to the standalone reader while the shared host is
+     * built out, so the half-finished one is opt-in rather than what everyone lands in.
+     */
+    fun readerRenderingMode() =
+        preferenceStore.getEnum("ln_reader_rendering_mode", NovelRenderingMode.LEGACY)
 
     /** When true the reader follows the system light/dark mode; otherwise the chosen preset wins. */
     fun readerFollowSystemTheme() = preferenceStore.getBoolean("ln_reader_follow_system_theme", true)

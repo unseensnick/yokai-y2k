@@ -60,6 +60,7 @@ import eu.kanade.presentation.reader.appbars.ReaderAppBars
 import eu.kanade.presentation.reader.components.ChapterNavigatorType
 import eu.kanade.presentation.reader.settings.ReaderSettingsDialog
 import eu.kanade.presentation.theme.TachiyomiTheme
+import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
@@ -79,6 +80,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
+import eu.kanade.tachiyomi.util.system.isNightMode
 import eu.kanade.tachiyomi.util.system.openInBrowser
 import eu.kanade.tachiyomi.util.system.readerBackgroundColor
 import eu.kanade.tachiyomi.util.system.toShareIntent
@@ -101,12 +103,18 @@ import mihon.app.di.AppGraph
 import mihon.core.metro.metroGraph
 import reikai.domain.entry.EntryId
 import reikai.domain.reader.pageIndex
+import reikai.presentation.novel.reader.buildReaderHtml
+import reikai.presentation.novel.reader.resolvedForSystemTheme
 import reikai.presentation.reader.MangaReaderProvider
 import reikai.presentation.reader.MangaViewport
+import reikai.presentation.reader.NovelReaderProvider
+import reikai.presentation.reader.NovelReaderViewModel
+import reikai.presentation.reader.NovelWebViewport
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
 import reikai.presentation.reader.putEntryId
 import reikai.presentation.reader.readEntryId
+import reikai.presentation.reader.resolveReaderThemeColors
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
@@ -115,6 +123,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.util.collectAsState
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 import androidx.compose.ui.graphics.Color as ComposeColor
 
@@ -141,6 +150,25 @@ class ReaderActivity : BaseActivity() {
                 // RK: name the entry by type as well, so the host can tell a novel launch from a
                 // manga one. The "manga" extra above stays for ReaderViewModel's own saved state.
                 if (mangaId != null) putEntryId(EntryId.Manga(mangaId))
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        }
+
+        /**
+         * The novel entry into the same host. Deliberately not an overload of [newIntent]: a novel
+         * launch writes no `"manga"` extra, so a caller that confuses the two gets a compile error
+         * rather than a reader that opens the wrong entry.
+         */
+        fun newNovelIntent(
+            context: Context,
+            novelId: Long,
+            chapterId: Long,
+            sourceScoped: Boolean = false,
+        ): Intent {
+            return Intent(context, ReaderActivity::class.java).apply {
+                putExtra("chapter", chapterId)
+                if (sourceScoped) putExtra("source_scoped", true)
+                putEntryId(EntryId.Novel(novelId))
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
@@ -176,12 +204,39 @@ class ReaderActivity : BaseActivity() {
 
     // Resolved after viewModel so the provider has a model to wrap. Manual assisted factories are a
     // plain function rather than a ViewModelProvider.Factory, which is what the initializer wraps.
+
+    /**
+     * The novel model, resolved only for a novel launch. Reading it on a manga launch would build a
+     * model for an entry that does not exist, so everything that touches it goes through
+     * [novelSession], which is null for manga.
+     */
+    private val novelViewModel by viewModels<NovelReaderViewModel> {
+        viewModelFactory {
+            initializer {
+                graph.viewModelFactory
+                    .createManuallyAssistedFactory(NovelReaderViewModel.Factory::class)()
+                    .create(
+                        novelId = intent.entryId()?.rawId ?: -1L,
+                        initialChapterId = intent.getLongExtra("chapter", -1L),
+                        sourceScoped = intent.getBooleanExtra("source_scoped", false),
+                    )
+            }
+        }
+    }
+
+    /** The novel half of the session, or null when this launch is a manga one. */
+    private val novelSession: NovelReaderProvider? by lazy {
+        (intent.entryId() as? EntryId.Novel)?.let {
+            NovelReaderProvider(novelViewModel, onToggleMenu = ::toggleMenu)
+        }
+    }
+
     val engine by viewModels<ReaderEngine> {
         viewModelFactory {
             initializer {
                 graph.viewModelFactory
                     .createManuallyAssistedFactory(ReaderEngine.Factory::class)()
-                    .create(mangaProvider)
+                    .create(novelSession ?: mangaProvider)
             }
         }
     }
@@ -241,6 +296,15 @@ class ReaderActivity : BaseActivity() {
         if (launchedEntry == null || intent.getLongExtra("chapter", -1L) == -1L) {
             finish()
             return
+        }
+        // A novel session installs its viewport here rather than from the manga collector, which is
+        // what updateViewer() hangs off and which never fires without a Manga in state.
+        novelSession?.let { provider ->
+            val viewport = provider.createViewport(this) as NovelWebViewport
+            engine.installViewport(viewport)
+            updateViewerInset(readerPreferences.fullscreen.get(), readerPreferences.drawUnderCutout.get())
+            binding.viewerContainer.addView(viewport.view)
+            loadNovelChapters(provider, viewport)
         }
         // RK <--
 
@@ -452,6 +516,49 @@ class ReaderActivity : BaseActivity() {
         config = null
         menuToggleToast?.cancel()
         readingModeToast?.cancel()
+    }
+
+    /**
+     * Renders each chapter the novel model loads. The document is assembled here rather than in the
+     * model because its Material colours come off this Activity's own theme, which is what carries
+     * the user's chosen app theme.
+     */
+    private fun loadNovelChapters(provider: NovelReaderProvider, viewport: NovelWebViewport) {
+        val model = provider.viewModel
+        model.chapter
+            .filterNotNull()
+            .distinctUntilChanged()
+            .onEach { chapter ->
+                viewport.load(
+                    html = buildReaderHtml(
+                        chapterHtml = chapter.html,
+                        chapterName = chapter.title,
+                        progressPercent = chapter.progressPercent,
+                        // Neighbour resolution is not on this model yet, and the bundled page chrome
+                        // that would use these is deliberately not loaded.
+                        hasPrev = false,
+                        hasNext = false,
+                        // "Auto" resolves to a preset at render time; the stored colours are only
+                        // what a manual choice left behind.
+                        settings = model.settings.value.resolvedForSystemTheme(isNightMode()),
+                        colors = resolveReaderThemeColors(),
+                        statusBarHeightPx = displayCutoutTopDp(),
+                        debug = BuildConfig.DEBUG,
+                    ),
+                    baseUrl = chapter.baseUrl,
+                )
+            }
+            .launchIn(lifecycleScope)
+    }
+
+    /**
+     * The cutout inset in dp, so the first line clears a punch-hole in immersive mode. The WebView
+     * viewport is initial-scale=1, so its CSS pixels are dp.
+     */
+    private fun displayCutoutTopDp(): Int {
+        val insets = ViewCompat.getRootWindowInsets(binding.root)
+            ?.getInsets(WindowInsetsCompat.Type.displayCutout())
+        return ((insets?.top ?: 0) / resources.displayMetrics.density).roundToInt()
     }
 
     // RK --> the activity is singleTask, so a launch while it is already alive is delivered here

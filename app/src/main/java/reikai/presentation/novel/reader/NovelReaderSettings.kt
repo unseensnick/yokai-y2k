@@ -81,6 +81,17 @@ val readerThemePresets = listOf(
 val readerLightPreset = readerThemePresets.first { it.name == "Light" }
 val readerDarkPreset = readerThemePresets.first { it.name == "Dark" }
 
+/**
+ * Applies the "Auto" theme option, which every reader owes before it renders. The stored colours are
+ * whatever a manual choice last left behind, so skipping this shows a reader the opposite shade of
+ * the one the user is in rather than falling back to a sensible default.
+ */
+fun NovelReaderSettings.resolvedForSystemTheme(isDark: Boolean): NovelReaderSettings {
+    if (!followSystemTheme) return this
+    val preset = if (isDark) readerDarkPreset else readerLightPreset
+    return copy(backgroundColor = preset.background, textColor = preset.textColor)
+}
+
 /** A selectable reader font. [family] is empty for the source's original font and otherwise matches
  *  a bundled `assets/fonts/<family>.ttf` (the path the LNReader web layer loads). */
 data class ReaderFont(val family: String, val name: String)

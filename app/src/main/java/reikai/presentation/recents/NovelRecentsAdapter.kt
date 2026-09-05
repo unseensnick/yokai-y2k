@@ -44,7 +44,8 @@ import reikai.presentation.browse.decideAdd
 import reikai.presentation.history.NovelHistoryViewModel
 import reikai.presentation.novel.browse.NovelLibraryAdder
 import reikai.presentation.novel.details.NovelScreen
-import reikai.presentation.novel.reader.NovelReaderScreen
+import reikai.presentation.reader.NovelReaderTarget
+import reikai.presentation.reader.novelReaderTarget
 import reikai.presentation.updates.NovelUpdatesItem
 import reikai.presentation.updates.NovelUpdatesViewModel
 import kotlin.time.Clock
@@ -298,9 +299,18 @@ class NovelRecentsAdapter(
     // No lookup, unlike detailsScreen: the novel reader is keyed by id, not by source and url.
     override suspend fun open(item: RecentsItem): RecentsOpen? {
         val target = targetChapter(item) ?: return null
-        return RecentsOpen.ReaderScreen(
-            NovelReaderScreen(item.entryId.rawId, target.chapterId, sourceScoped = item.lane.sourceScoped),
+        // RK: which novel reader opens is one decision, made in novelReaderTarget for all three
+        // entry points, so the preference cannot apply on some rows and not others.
+        val opened = novelReaderTarget(
+            context = application,
+            novelId = item.entryId.rawId,
+            chapterId = target.chapterId,
+            sourceScoped = item.lane.sourceScoped,
         )
+        return when (opened) {
+            is NovelReaderTarget.LegacyScreen -> RecentsOpen.ReaderScreen(opened.screen)
+            is NovelReaderTarget.Host -> RecentsOpen.ReaderIntent(opened.intent)
+        }
     }
 
     override fun rowUi(item: RecentsItem): RecentsRowUi = novelRowUi(item)

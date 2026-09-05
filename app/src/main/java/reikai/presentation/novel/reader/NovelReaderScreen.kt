@@ -95,14 +95,7 @@ class NovelReaderScreen(
 
         // Resolve "Auto" into the effective light/dark preset; otherwise use the chosen preset as-is.
         val systemDark = isSystemInDarkTheme()
-        val settings = remember(rawSettings, systemDark) {
-            if (rawSettings.followSystemTheme) {
-                val preset = if (systemDark) readerDarkPreset else readerLightPreset
-                rawSettings.copy(backgroundColor = preset.background, textColor = preset.textColor)
-            } else {
-                rawSettings
-            }
-        }
+        val settings = remember(rawSettings, systemDark) { rawSettings.resolvedForSystemTheme(systemDark) }
 
         var menuVisible by rememberSaveable { mutableStateOf(true) }
         var settingsOpen by rememberSaveable { mutableStateOf(false) }
