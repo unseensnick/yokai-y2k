@@ -1,7 +1,9 @@
 package reikai.presentation.reader
 
 import android.content.Context
+import android.content.Intent
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.Navigator
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import mihon.app.di.appGraph
 import reikai.domain.novel.NovelRenderingMode
@@ -30,5 +32,12 @@ fun novelReaderTarget(
 sealed interface NovelReaderTarget {
     data class LegacyScreen(val screen: Screen) : NovelReaderTarget
 
-    data class Host(val intent: android.content.Intent) : NovelReaderTarget
+    data class Host(val intent: Intent) : NovelReaderTarget
+}
+
+/** Opens the target the Voyager way. The recents engine has no navigator and hands its target back
+ *  to the screen instead, which is why the opening is not folded into [novelReaderTarget]. */
+fun NovelReaderTarget.open(context: Context, navigator: Navigator) = when (this) {
+    is NovelReaderTarget.LegacyScreen -> navigator.push(screen)
+    is NovelReaderTarget.Host -> context.startActivity(intent)
 }

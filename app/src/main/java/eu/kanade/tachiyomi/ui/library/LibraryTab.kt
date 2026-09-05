@@ -95,7 +95,8 @@ import reikai.presentation.library.updateerror.UpdateErrorsScreen
 import reikai.presentation.library.visualLabel
 import reikai.presentation.migrate.flow.EntryMigrationSourcePickScreen
 import reikai.presentation.novel.details.NovelScreen
-import reikai.presentation.novel.reader.NovelReaderScreen
+import reikai.presentation.reader.novelReaderTarget
+import reikai.presentation.reader.open
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.withUIContext
@@ -381,7 +382,7 @@ data object LibraryTab : Tab {
                 val resume = novelModel.getResume(item.manga.id)
                 if (resume != null) {
                     withUIContext {
-                        navigator.push(NovelReaderScreen(resume.novelId, resume.id))
+                        novelReaderTarget(context, resume.novelId, resume.id).open(context, navigator)
                     }
                 } else {
                     snackbarHostState.showSnackbar(context.stringResource(MR.strings.no_next_chapter))
