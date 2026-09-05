@@ -23,6 +23,8 @@ fun ReaderBottomBar(
     onClickWebView: (() -> Unit)?,
     onClickBrowser: (() -> Unit)?,
     onClickShare: (() -> Unit)?,
+    keepScreenOn: Boolean,
+    onClickKeepScreenOn: () -> Unit,
     // RK <--
     modifier: Modifier = Modifier,
 ) {
@@ -35,6 +37,8 @@ fun ReaderBottomBar(
         onClickWebView = onClickWebView,
         onClickBrowser = onClickBrowser,
         onClickShare = onClickShare,
+        keepScreenOn = keepScreenOn,
+        onClickKeepScreenOn = onClickKeepScreenOn,
         orientation = orientation,
         onClickOrientation = onClickOrientation,
         onClickSettings = onClickSettings,

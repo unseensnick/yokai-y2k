@@ -51,7 +51,6 @@ import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.reader.ChapterListDialog
 import eu.kanade.presentation.reader.DisplayRefreshHost
-import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.ReaderContentOverlay
 import eu.kanade.presentation.reader.ReaderPageActionsDialog
 import eu.kanade.presentation.reader.ReaderPageIndicator
@@ -113,6 +112,7 @@ import reikai.presentation.reader.NovelReaderViewModel
 import reikai.presentation.reader.NovelWebViewport
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
+import reikai.presentation.reader.ReaderOrientationDialog
 import reikai.presentation.reader.putEntryId
 import reikai.presentation.reader.readEntryId
 import reikai.presentation.reader.resolveReaderThemeColors
@@ -203,7 +203,7 @@ class ReaderActivity : BaseActivity() {
     // The provider is held here as its own type as well, because building page actions is a manga
     // question the neutral seam does not carry; it is stateless, so the engine surviving a recreate
     // with an earlier instance changes nothing.
-    private val mangaProvider by lazy { MangaReaderProvider(viewModel, readerPreferences, lifecycleScope) }
+    private val mangaProvider by lazy { MangaReaderProvider(viewModel, readerPreferences) }
 
     // Resolved after viewModel so the provider has a model to wrap. Manual assisted factories are a
     // plain function rather than a ViewModelProvider.Factory, which is what the initializer wraps.
@@ -230,7 +230,7 @@ class ReaderActivity : BaseActivity() {
     /** The novel half of the session, or null when this launch is a manga one. */
     private val novelSession: NovelReaderProvider? by lazy {
         (intent.entryId() as? EntryId.Novel)?.let {
-            NovelReaderProvider(novelViewModel, novelPreferences, lifecycleScope, onToggleMenu = ::toggleMenu)
+            NovelReaderProvider(novelViewModel, novelPreferences)
         }
     }
 
@@ -308,6 +308,13 @@ class ReaderActivity : BaseActivity() {
             updateViewerInset(readerPreferences.fullscreen.get(), readerPreferences.drawUnderCutout.get())
             binding.viewerContainer.addView(viewport.view)
             loadNovelChapters(provider, viewport)
+            // Manga locks the window from setViewer, deferred behind the shared-element transition;
+            // a novel launch runs neither, so it follows its own resolved orientation from here.
+            provider.viewModel.settings
+                .map { it.resolvedOrientation }
+                .distinctUntilChanged()
+                .onEach(::setOrientation)
+                .launchIn(lifecycleScope)
         }
         // RK <--
 
@@ -468,14 +475,16 @@ class ReaderActivity : BaseActivity() {
                         },
                     )
                 }
+                // RK: over the engine, so the flag written belongs to whichever entry is open.
                 is ReaderDialog.OrientationSelect -> {
-                    OrientationSelectDialog(
-                        onDismissRequest = onDismissRequest,
-                        viewModel = settingsViewModel,
-                        onChange = { stringRes ->
+                    ReaderOrientationDialog(
+                        currentOrientation = engine.orientation.collectAsState().value,
+                        onChange = {
+                            engine.setOrientation(it)
                             menuToggleToast?.cancel()
-                            menuToggleToast = toast(stringRes)
+                            menuToggleToast = toast(ReaderOrientation.fromPreference(it).stringRes)
                         },
+                        onDismiss = onDismissRequest,
                     )
                 }
                 is ReaderDialog.PageActions -> {
@@ -709,6 +718,8 @@ class ReaderActivity : BaseActivity() {
 
         // RK: from the engine, so a novel session offers its own actions rather than manga's.
         val bottomButtons by engine.bottomButtons.collectAsState()
+        val orientation by engine.orientation.collectAsState()
+        val keepScreenOn by engine.keepScreenOn.collectAsState()
 
         ReaderAppBars(
             visible = state.menuVisible,
@@ -757,9 +768,7 @@ class ReaderActivity : BaseActivity() {
                 viewModel.getMangaReadingMode(resolveDefault = false),
             ),
             onClickReadingMode = { engine.openDialog(ReaderDialog.ReadingModeSelect) },
-            orientation = ReaderOrientation.fromPreference(
-                viewModel.getMangaOrientation(resolveDefault = false),
-            ),
+            orientation = ReaderOrientation.fromPreference(orientation),
             onClickOrientation = { engine.openDialog(ReaderDialog.OrientationSelect) },
             cropEnabled = cropEnabled,
             onClickCropBorder = {
@@ -771,6 +780,8 @@ class ReaderActivity : BaseActivity() {
             // RK -->
             bottomButtons = bottomButtons,
             onClickChapterList = { engine.openDialog(ReaderDialog.ChapterList) },
+            keepScreenOn = keepScreenOn,
+            onClickKeepScreenOn = { engine.setKeepScreenOn(!keepScreenOn) },
             // RK <--
         )
     }
@@ -1132,7 +1143,9 @@ class ReaderActivity : BaseActivity() {
                 }
                 .launchIn(lifecycleScope)
 
-            readerPreferences.keepScreenOn.changes()
+            // RK: off the engine, since each content type keeps its own flag and novels can flip it
+            // from the bar.
+            engine.keepScreenOn
                 .onEach(::setKeepScreenOn)
                 .launchIn(lifecycleScope)
 

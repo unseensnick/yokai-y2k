@@ -1,34 +1,42 @@
 package reikai.presentation.reader
 
+import eu.kanade.domain.manga.model.readerOrientation
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.reader.ReaderViewModel
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 
 /**
  * Manga's answers, over the live [ReaderViewModel] the host already resolved. It stays Mihon's and
- * stays synced; this only adapts it. The scope is the host's, since the chrome flow outlives no
- * single view and must not outlive the session.
+ * stays synced; this only adapts it.
  */
 class MangaReaderProvider(
     private val viewModel: ReaderViewModel,
-    readerPreferences: ReaderPreferences,
-    scope: CoroutineScope,
+    private val readerPreferences: ReaderPreferences,
 ) : ReaderProvider {
-
-    override val bottomButtons: StateFlow<Set<String>> = readerPreferences.readerBottomButtons.stateIn(scope)
 
     // The visible chapter rather than the active one: they differ mid-scroll across a boundary, and
     // pairing a title from one with a page count from the other is the chrome tear.
-    override val chrome: StateFlow<ReaderChromeState> = viewModel.state
+    override val chrome: Flow<ReaderChromeState> = viewModel.state
         .map { ReaderChromeState(it.manga?.title, it.visibleChapter?.chapter?.name) }
-        .stateIn(scope, SharingStarted.Eagerly, ReaderChromeState())
+
+    override val bottomButtons: Flow<Set<String>> = readerPreferences.readerBottomButtons.changes()
+
+    // Unresolved, because the picker's "use default" action has to be able to tell a series following
+    // the default from one pinned to the same value the default happens to be.
+    override val orientation: Flow<Int> = viewModel.state
+        .map { it.manga?.readerOrientation?.toInt() ?: ReaderOrientation.DEFAULT.flagValue }
+
+    override val keepScreenOn: Flow<Boolean> = readerPreferences.keepScreenOn.changes()
+
+    override fun setOrientation(flagValue: Int) =
+        viewModel.setMangaOrientationType(ReaderOrientation.fromPreference(flagValue))
+
+    override fun setKeepScreenOn(enabled: Boolean) = readerPreferences.keepScreenOn.set(enabled)
 
     // Resolved rather than read off the stored flag, because auto-webtoon overrides a series to long
     // strip at open time without writing the preference.

@@ -1,6 +1,7 @@
 package reikai.presentation.reader
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
@@ -8,9 +9,12 @@ import dev.zacsweers.metro.AssistedInject
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * The Reikai-owned reader engine, above one provider per content type. It owns dialog dispatch and
@@ -32,11 +36,31 @@ class ReaderEngine(
         fun create(provider: ReaderProvider): ReaderEngine
     }
 
+    // Session state, shared here rather than in the provider: this engine outlives an Activity
+    // recreation, so state kept alive by the Activity's scope would freeze the first time the reader
+    // is rotated. Eager, because the window's orientation and keep-screen-on follow these whether or
+    // not anything is composed.
+
     /** What the chrome shows, answered by whichever content type this session is for. */
-    val chrome: StateFlow<ReaderChromeState> get() = provider.chrome
+    val chrome: StateFlow<ReaderChromeState> =
+        provider.chrome.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderChromeState())
 
     /** The bottom-bar buttons this session offers, likewise its own rather than manga's. */
-    val bottomButtons: StateFlow<Set<String>> get() = provider.bottomButtons
+    val bottomButtons: StateFlow<Set<String>> =
+        provider.bottomButtons.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    // The bar's own verbs, so a button acts on the entry that is open rather than on a manga model
+    // the session may not have.
+
+    val orientation: StateFlow<Int> =
+        provider.orientation.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderOrientation.DEFAULT.flagValue)
+
+    fun setOrientation(flagValue: Int) = provider.setOrientation(flagValue)
+
+    val keepScreenOn: StateFlow<Boolean> =
+        provider.keepScreenOn.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setKeepScreenOn(enabled: Boolean) = provider.setKeepScreenOn(enabled)
 
     // Dialogs: one slot, so raising a dialog is also how the previous one closes.
 

@@ -26,6 +26,7 @@ import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.interactor.SetNovelReadStatus
+import reikai.domain.novel.interactor.SetNovelViewerFlags
 import reikai.domain.novel.interactor.UpsertNovelHistory
 import reikai.domain.novel.model.NovelChapter
 import reikai.domain.novel.model.NovelHistoryUpdate
@@ -66,6 +67,7 @@ class NovelReaderViewModel(
     private val trackNovelChapter: TrackNovelChapter,
     private val trackPreferences: TrackPreferences,
     private val getIncognitoState: GetIncognitoState,
+    private val setNovelViewerFlags: SetNovelViewerFlags,
     private val context: Context,
 ) : ViewModel() {
 
@@ -108,6 +110,21 @@ class NovelReaderViewModel(
      *  default). Keyed on the opened entry [novelId] (the anchor for a merged novel), since orientation
      *  is a book-level preference like sort/filter rather than per-source progress. */
     private val orientationOverride = MutableStateFlow(ReaderOrientation.DEFAULT.flagValue)
+
+    init {
+        // The override is persisted on the entry, so read it back before the first frame locks the
+        // window to whatever the global default says.
+        viewModelScope.launchIO {
+            novelRepo.getById(novelId)?.let { orientationOverride.value = it.readerOrientation.toInt() }
+        }
+    }
+
+    fun setOrientation(flagValue: Int) {
+        orientationOverride.value = flagValue
+        viewModelScope.launchIO { setNovelViewerFlags.awaitSetOrientation(novelId, flagValue.toLong()) }
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) = novelPreferences.readerKeepScreenOn().set(enabled)
 
     /** Reactive reader display settings; the screen resolves follow-system into colors. */
     val settings: StateFlow<NovelReaderSettings> = combine(

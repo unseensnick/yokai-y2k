@@ -1,4 +1,4 @@
-package reikai.presentation.novel.reader
+package reikai.presentation.reader
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.grid.items
@@ -19,12 +19,12 @@ import tachiyomi.presentation.core.i18n.stringResource
 private val OrientationsWithoutDefault = ReaderOrientation.entries - ReaderOrientation.DEFAULT
 
 /**
- * Orientation picker for the novel reader's bottom-bar rotation button, the novel twin of the manga
- * reader's [eu.kanade.presentation.reader.OrientationSelectDialog]: the same icon grid + "Apply" /
- * "Use default" actions, wired to the per-novel orientation flag.
+ * Orientation picker for the reader's rotation button, both content types. Takes the entry's own flag
+ * and hands one back, so the caller owns where it is stored; Mihon's `OrientationSelectDialog`, which
+ * read the manga off a settings model, was deleted for it.
  */
 @Composable
-fun NovelReaderOrientationDialog(
+fun ReaderOrientationDialog(
     currentOrientation: Int,
     onChange: (Int) -> Unit,
     onDismiss: () -> Unit,

@@ -4,12 +4,30 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ReaderEngineTest {
+
+    // The engine shares the provider's flows in its own scope, which is the main one.
+    @BeforeEach
+    fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    @AfterEach
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     private fun engine(provider: FakeReaderProvider = FakeReaderProvider()) = ReaderEngine(provider)
 
@@ -114,6 +132,32 @@ class ReaderEngineTest {
         engine.bottomButtons.value shouldBe setOf("as", "th")
     }
 
+    /**
+     * The bar's verbs used to act on the manga model whatever was open, so rotating in a novel
+     * session wrote a flag on a manga that was not there.
+     */
+    @Test
+    fun `rotating goes to the session rather than a model the host picked`() {
+        val provider = FakeReaderProvider()
+        val engine = engine(provider)
+
+        engine.setOrientation(ReaderOrientation.PORTRAIT.flagValue)
+
+        provider.orientation.value shouldBe ReaderOrientation.PORTRAIT.flagValue
+        engine.orientation.value shouldBe ReaderOrientation.PORTRAIT.flagValue
+    }
+
+    @Test
+    fun `keeping the screen on goes to the session too`() {
+        val provider = FakeReaderProvider()
+        val engine = engine(provider)
+
+        engine.setKeepScreenOn(true)
+
+        provider.keepScreenOn.value shouldBe true
+        engine.keepScreenOn.value shouldBe true
+    }
+
     @Test
     fun `no viewport is installed to begin with`() {
         engine().viewport.value shouldBe null
@@ -165,6 +209,18 @@ private class FakeReaderProvider : ReaderProvider {
     override val chrome = MutableStateFlow(ReaderChromeState())
 
     override val bottomButtons = MutableStateFlow(emptySet<String>())
+
+    override val orientation = MutableStateFlow(0)
+
+    override val keepScreenOn = MutableStateFlow(false)
+
+    override fun setOrientation(flagValue: Int) {
+        orientation.value = flagValue
+    }
+
+    override fun setKeepScreenOn(enabled: Boolean) {
+        keepScreenOn.value = enabled
+    }
 
     override fun createViewport(host: ReaderActivity): ReaderViewport =
         error("a unit test never builds a viewport")

@@ -1,11 +1,9 @@
 package reikai.presentation.reader
 
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
 import reikai.domain.novel.NovelPreferences
 
 /**
@@ -16,16 +14,22 @@ import reikai.domain.novel.NovelPreferences
 class NovelReaderProvider(
     val viewModel: NovelReaderViewModel,
     novelPreferences: NovelPreferences,
-    scope: CoroutineScope,
-    private val onToggleMenu: () -> Unit,
 ) : ReaderProvider {
 
-    override val bottomButtons: StateFlow<Set<String>> = novelPreferences.readerBottomButtons().stateIn(scope)
-
-    override val chrome: StateFlow<ReaderChromeState> =
+    override val chrome: Flow<ReaderChromeState> =
         combine(viewModel.entryTitle, viewModel.chapter) { title, chapter ->
             ReaderChromeState(title, chapter?.title)
-        }.stateIn(scope, SharingStarted.Eagerly, ReaderChromeState())
+        }
+
+    override val bottomButtons: Flow<Set<String>> = novelPreferences.readerBottomButtons().changes()
+
+    override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }
+
+    override val keepScreenOn: Flow<Boolean> = viewModel.settings.map { it.keepScreenOn }
+
+    override fun setOrientation(flagValue: Int) = viewModel.setOrientation(flagValue)
+
+    override fun setKeepScreenOn(enabled: Boolean) = viewModel.setKeepScreenOn(enabled)
 
     /**
      * The volume-key values are read once, here, because the viewport takes them as plain values so it
@@ -43,7 +47,9 @@ class NovelReaderProvider(
             // the one that persists, and it carries mark-as-read and trackers with it.
             onProgressChanged = {},
             onProgressSettled = viewModel::saveProgress,
-            onToggleMenu = onToggleMenu,
+            // Taken from the host being built against rather than held, so a reader rebuilt after a
+            // rotation toggles the live Activity's menu instead of the destroyed one's.
+            onToggleMenu = host::toggleMenu,
         )
     }
 }

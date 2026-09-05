@@ -63,6 +63,7 @@ import eu.kanade.tachiyomi.util.system.openInBrowser
 import reikai.domain.novel.model.NovelChapter
 import reikai.domain.novel.tts.TtsPlayback
 import reikai.presentation.reader.ReaderActionRow
+import reikai.presentation.reader.ReaderOrientationDialog
 import reikai.presentation.reader.VerticalReaderRail
 import reikai.presentation.reader.readerBarEnter
 import reikai.presentation.reader.readerBarExit
@@ -528,7 +529,7 @@ class NovelReaderScreen(
         }
 
         if (orientationOpen) {
-            NovelReaderOrientationDialog(
+            ReaderOrientationDialog(
                 currentOrientation = settings.orientation,
                 onChange = screenModel::setOrientation,
                 onDismiss = { orientationOpen = false },
