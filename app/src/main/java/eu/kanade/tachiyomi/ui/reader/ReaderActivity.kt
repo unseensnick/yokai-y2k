@@ -99,11 +99,14 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.app.di.AppGraph
 import mihon.core.metro.metroGraph
+import reikai.domain.entry.EntryId
 import reikai.domain.reader.pageIndex
 import reikai.presentation.reader.MangaReaderProvider
 import reikai.presentation.reader.MangaViewport
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
+import reikai.presentation.reader.putEntryId
+import reikai.presentation.reader.readEntryId
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
@@ -135,10 +138,21 @@ class ReaderActivity : BaseActivity() {
                 putExtra("chapter", chapterId)
                 if (page != null) putExtra("launch_page", page)
                 if (sourceScoped) putExtra("source_scoped", true)
+                // RK: name the entry by type as well, so the host can tell a novel launch from a
+                // manga one. The "manga" extra above stays for ReaderViewModel's own saved state.
+                if (mangaId != null) putEntryId(EntryId.Manga(mangaId))
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
     }
+
+    /**
+     * Which entry this launch names, or null when it names none. Falls back to the bare `"manga"`
+     * extra so an intent built before the tag existed, a pending notification action for instance,
+     * still opens rather than being read as a launch for nothing.
+     */
+    private fun Intent.entryId(): EntryId? =
+        readEntryId() ?: getLongExtra("manga", -1L).takeIf { it != -1L }?.let(EntryId::Manga)
 
     private val graph: AppGraph by lazy { metroGraph() }
 
@@ -218,12 +232,19 @@ class ReaderActivity : BaseActivity() {
 
         binding = ReaderActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        binding.setComposeOverlay()
 
-        if (!viewModel.hasValidArgs) {
+        // RK --> decided from the intent and BEFORE the overlay, which was the other way round: the
+        // overlay reads the manga model, so an unusable launch used to build the whole manga stack
+        // and then finish. Asking the intent also lets a launch name a novel, which asking the manga
+        // model never could.
+        val launchedEntry = intent.entryId()
+        if (launchedEntry == null || intent.getLongExtra("chapter", -1L) == -1L) {
             finish()
             return
         }
+        // RK <--
+
+        binding.setComposeOverlay()
 
         NotificationReceiver.dismissNotification(
             this,
@@ -432,6 +453,27 @@ class ReaderActivity : BaseActivity() {
         menuToggleToast?.cancel()
         readingModeToast?.cancel()
     }
+
+    // RK --> the activity is singleTask, so a launch while it is already alive is delivered here
+    // instead of building a new instance. Without this the new intent was dropped and the reader
+    // stayed on whatever it was already showing, which a second content type makes far likelier to
+    // hit. Restarting is the honest answer: the entry a session is for is read once, at construction.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val requested = intent.entryId() ?: return
+        if (requested == this.intent.entryId() &&
+            intent.getLongExtra("chapter", -1L) == this.intent.getLongExtra("chapter", -1L)
+        ) {
+            return
+        }
+        // setIntent BEFORE finishing: if the restart is delivered here again rather than to a fresh
+        // instance, which singleTask allows while this one is still dying, the guard above now sees
+        // its own intent and stops. Reordering these two lines reintroduces that loop.
+        setIntent(intent)
+        finish()
+        startActivity(intent)
+    }
+    // RK <--
 
     override fun onPause() {
         lifecycleScope.launchNonCancellable {
