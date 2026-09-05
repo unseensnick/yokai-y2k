@@ -170,7 +170,12 @@ class ReaderViewModel(
 
     val hasValidArgs = mangaId != -1L && initialChapterId != -1L
 
-    private val eventChannel = Channel<Event>()
+    // RK: buffered rather than upstream's rendezvous, which drops from the two trySend senders
+    // (preload and onPageSelected) whenever the single collector is not parked at receive. A lost
+    // PageChanged does not heal: DisplayRefreshHost counts calls and flashes every nth, so one drop
+    // shifts the e-ink flash phase for the rest of the session. A lost ReloadViewerChapters leaves a
+    // preloaded chapter that never reaches the viewer. Upstream has the same shape.
+    private val eventChannel = Channel<Event>(Channel.UNLIMITED)
     val eventFlow = eventChannel.receiveAsFlow()
 
     /**
