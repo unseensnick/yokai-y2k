@@ -51,7 +51,6 @@ import eu.kanade.tachiyomi.ui.reader.model.ViewerChapters
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
-import eu.kanade.tachiyomi.ui.reader.viewer.Viewer
 import eu.kanade.tachiyomi.util.chapter.filterDownloaded
 import eu.kanade.tachiyomi.util.editCover
 import eu.kanade.tachiyomi.util.lang.byteSize
@@ -644,12 +643,6 @@ class ReaderViewModel(
         eventChannel.trySend(Event.ReloadViewerChapters)
     }
 
-    fun onViewerLoaded(viewer: Viewer?) {
-        mutableState.update {
-            it.copy(viewer = viewer)
-        }
-    }
-
     /**
      * Called every time a page changes on the reader. Used to mark the flag of chapters being
      * read, update tracking services, enqueue downloaded chapter deletion, and updating the active chapter if this
@@ -1074,31 +1067,6 @@ class ReaderViewModel(
         mutableState.update { it.copy(menuVisible = visible) }
     }
 
-    fun showLoadingDialog() {
-        mutableState.update { it.copy(dialog = Dialog.Loading) }
-    }
-
-    fun openReadingModeSelectDialog() {
-        mutableState.update { it.copy(dialog = Dialog.ReadingModeSelect) }
-    }
-
-    fun openOrientationModeSelectDialog() {
-        mutableState.update { it.copy(dialog = Dialog.OrientationModeSelect) }
-    }
-
-    fun openPageDialog(page: ReaderPage) {
-        mutableState.update { it.copy(dialog = Dialog.PageActions(page)) }
-    }
-
-    fun openSettingsDialog() {
-        mutableState.update { it.copy(dialog = Dialog.Settings) }
-    }
-
-    // RK -->
-    fun openChapterListSelectDialog() {
-        mutableState.update { it.copy(dialog = Dialog.ChapterListSelect) }
-    }
-
     /** Snapshot of the reader's chapter list for the in-reader chapter dialog (Y10). */
     fun getChapters(): List<ReaderChapterItem> {
         manga ?: return emptyList()
@@ -1210,10 +1178,6 @@ class ReaderViewModel(
     }
     // RK <--
 
-    fun closeDialog() {
-        mutableState.update { it.copy(dialog = null) }
-    }
-
     fun setBrightnessOverlayValue(value: Int) {
         mutableState.update { it.copy(brightnessOverlayValue = value) }
     }
@@ -1222,9 +1186,8 @@ class ReaderViewModel(
      * Saves the image of the selected page on the pictures directory and notifies the UI of the result.
      * There's also a notification to allow sharing the image somewhere else or deleting it.
      */
-    fun saveImage() {
-        val page = (state.value.dialog as? Dialog.PageActions)?.page
-        if (page?.status != Page.State.Ready) return
+    fun saveImage(page: ReaderPage) {
+        if (page.status != Page.State.Ready) return
         val manga = manga ?: return
 
         val notifier = SaveImageNotifier(context)
@@ -1269,9 +1232,8 @@ class ReaderViewModel(
      * get a path to the file and it has to be decompressed somewhere first. Only the last shared
      * image will be kept so it won't be taking lots of internal disk space.
      */
-    fun shareImage(copyToClipboard: Boolean) {
-        val page = (state.value.dialog as? Dialog.PageActions)?.page
-        if (page?.status != Page.State.Ready) return
+    fun shareImage(page: ReaderPage, copyToClipboard: Boolean) {
+        if (page.status != Page.State.Ready) return
         val manga = manga ?: return
 
         val destDir = context.cacheImageDir
@@ -1298,9 +1260,8 @@ class ReaderViewModel(
     /**
      * Sets the image of the selected page as cover and notifies the UI of the result.
      */
-    fun setAsCover() {
-        val page = (state.value.dialog as? Dialog.PageActions)?.page
-        if (page?.status != Page.State.Ready) return
+    fun setAsCover(page: ReaderPage) {
+        if (page.status != Page.State.Ready) return
         val manga = manga ?: return
         val stream = page.stream ?: return
 
@@ -1385,11 +1346,6 @@ class ReaderViewModel(
         val position: ReaderPosition? = null,
         // RK <--
 
-        /**
-         * Viewer used to display the pages (pager, webtoon, ...).
-         */
-        val viewer: Viewer? = null,
-        val dialog: Dialog? = null,
         val menuVisible: Boolean = false,
         @IntRange(from = -100, to = 100) val brightnessOverlayValue: Int = 0,
     ) {
@@ -1414,18 +1370,6 @@ class ReaderViewModel(
                     else -> null
                 } ?: currentChapter
             }
-        // RK <--
-    }
-
-    sealed interface Dialog {
-        data object Loading : Dialog
-        data object Settings : Dialog
-        data object ReadingModeSelect : Dialog
-        data object OrientationModeSelect : Dialog
-        data class PageActions(val page: ReaderPage) : Dialog
-
-        // RK -->
-        data object ChapterListSelect : Dialog
         // RK <--
     }
 

@@ -268,13 +268,23 @@ foreach ($file in $sources) {
             [void]$keyedModels.Add($m.Groups[1].Value)
         }
     }
+    # Keyed by the class that OWNS the factory, never by the factory's own name. Every one of these
+    # interfaces is called Factory, so matching the bare name meant one keyed Factory anywhere in the
+    # tree satisfied every resolution in the tree, and the rule passed on everything.
     if ($text.Contains('@ManualViewModelAssistedFactoryKey')) {
-        foreach ($m in [regex]::Matches($text, '(?m)^\s*(?:\w+ )*interface ([A-Za-z0-9_]+)')) {
+        # Indentation allowed: the owner is often a nested class, as MangaNotesScreen's Model is.
+        foreach ($m in [regex]::Matches($text, '(?m)^\s*(?:\w+ )*class ([A-Za-z0-9_]+)')) {
             [void]$keyedFactories.Add($m.Groups[1].Value)
         }
     }
-    foreach ($m in [regex]::Matches($text, 'assistedMetroViewModel<\s*([A-Za-z0-9_.]+)\s*,\s*([A-Za-z0-9_.]+)')) {
-        [void]$resolvedFactories.Add(($m.Groups[2].Value -split '\.')[-1])
+    foreach ($m in [regex]::Matches($text, 'assistedMetroViewModel<\s*[A-Za-z0-9_.]+\s*,\s*([A-Za-z0-9_]+)\.[A-Za-z0-9_]+\s*>')) {
+        [void]$resolvedFactories.Add($m.Groups[1].Value)
+    }
+    # The Compose helper above is not the only route: an Activity resolves a manual factory by name
+    # through createManuallyAssistedFactory, which fails at run time rather than at build time when
+    # the key is missing, exactly like the Compose case.
+    foreach ($m in [regex]::Matches($text, 'createManuallyAssistedFactory\(\s*([A-Za-z0-9_]+)\.[A-Za-z0-9_]+::class')) {
+        [void]$resolvedFactories.Add($m.Groups[1].Value)
     }
     foreach ($m in [regex]::Matches($text, '(?<!assisted)metroViewModel<\s*([A-Za-z0-9_.]+)')) {
         [void]$resolvedModels.Add(($m.Groups[1].Value -split '\.')[-1])
@@ -288,7 +298,7 @@ foreach ($file in $sources) {
 }
 $unkeyed = @(
     @($resolvedModels | Where-Object { -not $keyedModels.Contains($_) } | ForEach-Object { "  $_ is resolved by metroViewModel but carries no @ViewModelKey" }) +
-    @($resolvedFactories | Where-Object { -not $keyedFactories.Contains($_) } | ForEach-Object { "  $_ is resolved by assistedMetroViewModel but carries no @ManualViewModelAssistedFactoryKey" })
+    @($resolvedFactories | Where-Object { -not $keyedFactories.Contains($_) } | ForEach-Object { "  $_'s assisted factory is resolved but carries no @ManualViewModelAssistedFactoryKey" })
 )
 
 $failed = $false

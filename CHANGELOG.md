@@ -404,6 +404,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - Extension trust is re-checked from the repo list itself rather than by the two screens that happened to change it, so adding or removing a repo anywhere re-checks straight away, and a re-check can no longer be undone by the startup scan finishing after it.
 - The app now wires its components together at build time instead of looking them up while running, closing a class of crash that only showed up in release builds (synced from Mihon, mihonapp/mihon#3608). The light-novel reader keeps the old wiring until it is rebuilt.
 - Light-novel browse now pages through the same paging library the manga catalogue uses, instead of its own hand-rolled pager.
+- The reader's dialogs and its viewer slot now sit in a shared layer that does not know which kind of entry it is showing, the first step of serving manga and light novels from one reader. Nothing about the manga reader changes.
 - The manga reader now queues its internal events instead of discarding one when it arrives while the reader is busy. Two of them were sent in a way that could be dropped silently, which would have cost a page-turn signal or left a preloaded chapter unshown.
 
 ## [0.3.2]
