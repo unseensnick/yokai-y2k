@@ -6,6 +6,7 @@ import reikai.domain.novel.model.Novel
 import reikai.domain.novel.model.NovelChapter
 import reikai.novel.content.NovelContentConfig
 import reikai.novel.content.NovelContentPipeline
+import reikai.novel.content.NovelHtmlUtils
 import reikai.novel.content.RenderTarget
 import reikai.novel.install.LnPluginInstaller
 import java.util.Collections
@@ -53,7 +54,16 @@ class NovelChapterTextLoader(
             chapterUrl = chapter.url,
             chapterName = chapter.name,
         )
-        return pipeline.process(raw, config).text to baseUrl
+        val processed = pipeline.process(raw, config)
+        // A plain-text chapter leaves the pipeline unescaped and unsanitised, because a text renderer
+        // takes it verbatim. Both readers are HTML sinks, so it is escaped here or a `.txt` chapter's
+        // markup becomes live document.
+        val html = if (processed.isPlainText) {
+            NovelHtmlUtils.plainTextToHtml(processed.text)
+        } else {
+            processed.text
+        }
+        return html to baseUrl
     }
 
     private suspend fun fetch(chapter: NovelChapter): Pair<String, String?> {

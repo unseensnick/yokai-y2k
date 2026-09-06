@@ -142,7 +142,9 @@ object NovelHtmlUtils {
         }
     }
 
-    private fun plainTextToHtml(text: String): String {
+    /** Escapes [text] into an HTML block. An HTML sink must call this: the pipeline leaves plain text
+     *  unescaped so a text renderer can take it verbatim. */
+    fun plainTextToHtml(text: String): String {
         val normalized = normalizePlainTextContent(text)
         // Unescape before re-escaping: a source may hand back content where &lt;D&gt; is already
         // encoded, and escaping its & again would render the entity as literal text.

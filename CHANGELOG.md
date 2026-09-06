@@ -98,7 +98,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 **Light novels**
 
-- **Scripts embedded in a novel chapter no longer run while you read it.** Chapter markup comes from the source rather than from Reikai, so it is off unless you turn it back on under Settings -> Novel reader.
+- **Script blocks a novel chapter carries are now stripped before it renders, unless you allow them under Settings -> Novel reader.** Chapter markup comes from the source rather than from Reikai.
 
 **Library**
 
