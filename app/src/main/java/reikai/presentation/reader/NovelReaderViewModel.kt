@@ -161,14 +161,21 @@ class NovelReaderViewModel(
 
     /** Reactive reader display settings; the screen resolves follow-system into colors. */
     val settings: StateFlow<NovelReaderSettings> = combine(
+        // Split because the typed combine stops at five flows, not because the halves differ.
         combine(
-            novelPreferences.readerFontSize().changes(),
-            novelPreferences.readerLineSpacing().changes(),
-            novelPreferences.readerTextAlign().changes(),
-            novelPreferences.readerPadding().changes(),
-            novelPreferences.readerFontFamily().changes(),
-        ) { fontSize, lineHeight, textAlign, padding, fontFamily ->
-            DisplayPrefs(fontSize, lineHeight, textAlign, padding, fontFamily)
+            combine(
+                novelPreferences.readerFontSize().changes(),
+                novelPreferences.readerLineSpacing().changes(),
+                novelPreferences.readerTextAlign().changes(),
+                novelPreferences.readerPadding().changes(),
+                novelPreferences.readerFontFamily().changes(),
+            ) { fontSize, lineHeight, textAlign, padding, fontFamily ->
+                DisplayPrefs(fontSize, lineHeight, textAlign, padding, fontFamily)
+            },
+            novelPreferences.readerParagraphIndent().changes(),
+            novelPreferences.readerParagraphSpacing().changes(),
+        ) { display, indent, spacing ->
+            display.copy(paragraphIndent = indent, paragraphSpacing = spacing)
         },
         combine(
             novelPreferences.readerFollowSystemTheme().changes(),
@@ -219,6 +226,8 @@ class NovelReaderViewModel(
             lineHeight = display.lineHeight,
             textAlign = display.textAlign,
             padding = display.padding,
+            paragraphIndent = display.paragraphIndent,
+            paragraphSpacing = display.paragraphSpacing,
             fontFamily = display.fontFamily,
             followSystemTheme = theme.followSystem,
             backgroundColor = theme.background,
@@ -437,6 +446,8 @@ class NovelReaderViewModel(
             lineHeight = novelPreferences.readerLineSpacing().get(),
             textAlign = novelPreferences.readerTextAlign().get(),
             padding = novelPreferences.readerPadding().get(),
+            paragraphIndent = novelPreferences.readerParagraphIndent().get(),
+            paragraphSpacing = novelPreferences.readerParagraphSpacing().get(),
             fontFamily = novelPreferences.readerFontFamily().get(),
             followSystemTheme = novelPreferences.readerFollowSystemTheme().get(),
             backgroundColor = novelPreferences.readerBackgroundColor().get(),
@@ -746,6 +757,8 @@ class NovelReaderViewModel(
         val textAlign: String,
         val padding: Int,
         val fontFamily: String,
+        val paragraphIndent: Float = 0f,
+        val paragraphSpacing: Float = 0f,
     )
     private data class ThemePrefs(val followSystem: Boolean, val background: String, val textColor: String)
     private data class TtsPrefs(

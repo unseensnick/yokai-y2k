@@ -91,6 +91,8 @@ fun buildReaderHtml(
           --readerSettings-textAlign: ${settings.textAlign};
           --readerSettings-lineHeight: ${settings.lineHeight};
           --readerSettings-fontFamily: ${settings.fontFamily};
+          --readerSettings-paragraphIndent: ${settings.paragraphIndent}em;
+          --readerSettings-paragraphSpacing: ${settings.paragraphSpacing}em;
           --theme-primary: ${colors.primary};
           --theme-onPrimary: ${colors.onPrimary};
           --theme-secondary: ${colors.secondary};
@@ -104,6 +106,12 @@ fun buildReaderHtml(
           --theme-onSurfaceVariant: ${colors.onSurfaceVariant};
           --theme-outline: ${colors.outline};
           --theme-rippleColor: ${colors.rippleColor};
+        }
+        /* Spacing is added to the browser's own 1em paragraph margin, which is the gap both readers
+           had before this setting existed, so zero leaves the page exactly as it was. */
+        p {
+          text-indent: var(--readerSettings-paragraphIndent);
+          margin-bottom: calc(1em + var(--readerSettings-paragraphSpacing));
         }
         </style>
         </head>

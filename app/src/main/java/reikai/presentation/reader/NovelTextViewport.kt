@@ -22,14 +22,14 @@ import reikai.presentation.reader.text.ChapterTextBlock
 import reikai.presentation.reader.text.LinkOnlyMovementMethod
 import reikai.presentation.reader.text.NovelTextRenderer
 import reikai.presentation.reader.text.NovelTextStyle
+import reikai.presentation.reader.text.ParagraphShape
 import kotlin.math.roundToInt
 
 /**
  * The native light-novel viewport: the chapter as real text views rather than a WebView.
  *
  * The container is a recycler holding one chapter today, which is the shape the seamless window
- * needs, so that step extends this rather than re-hosting it. Links render as plain text for now:
- * nothing here makes a URL clickable, so a chapter cannot navigate anywhere at all.
+ * needs, so that step extends this rather than re-hosting it.
  */
 class NovelTextViewport(
     private val context: Context,
@@ -45,6 +45,9 @@ class NovelTextViewport(
 
     private var settings: NovelReaderSettings? = null
     private var block: ChapterTextBlock? = null
+
+    /** Held so a setting the spans are built from can draw the same chapter again. */
+    private var loaded: NovelReaderViewModel.LoadedChapter? = null
 
     /** Applied once the rendered text has a height to seek within, then cleared. */
     private var pendingProgress: Float? = null
@@ -79,36 +82,57 @@ class NovelTextViewport(
         hasNext: Boolean,
         settings: NovelReaderSettings,
     ) {
-        this.settings = settings
-        recycler.setBackgroundColor(NovelTextStyle.parseColor(settings.backgroundColor, Color.WHITE))
-        val block = ChapterTextBlock(context) { createChunkView(settings) }
-        this.block = block
-        rendered = false
-        adapter.show(block)
-        pendingProgress = chapter.progressPercent / 100f
-        renderer.render(
-            block = block,
-            html = chapter.html,
-            fontSize = settings.fontSize,
-            // Net-new settings; until they have their own preferences the renderer runs unstyled here
-            // and paragraph shape comes from the markup, as the WebView reader's does.
-            paragraphSpacing = 0f,
-            paragraphIndent = 0f,
-            selectable = textSelectable,
-            refererUrl = chapter.baseUrl?.let { it.trimEnd('/') + "/" },
-            onTextSet = ::applyPendingProgress,
-        )
+        loaded = chapter
+        draw(chapter, settings, startFraction = chapter.progressPercent / 100f)
     }
 
     override fun applySettings(settings: NovelReaderSettings) {
+        val previous = this.settings
         this.settings = settings
         recycler.setBackgroundColor(NovelTextStyle.parseColor(settings.backgroundColor, Color.WHITE))
+
+        val chapter = loaded
+        if (chapter != null && previous != null &&
+            previous.paragraphShape().needsRedrawFor(settings.paragraphShape())
+        ) {
+            draw(chapter, settings, startFraction = percent() / 100f)
+            return
+        }
         // Restyling a view holding PrecomputedText crashes the framework's own long-press drag path,
         // so the text is taken back to a plain CharSequence first (tsundoku NovelViewer:1754).
         block?.chunkViews?.forEach { view ->
             view.text = view.text.toString()
             NovelTextStyle.apply(view, settings, context)
         }
+    }
+
+    /**
+     * Indent and spacing are spans measured in pixels when the text is built, so neither they nor a
+     * font size they are a multiple of can be restyled in place. Redrawing from [startFraction] is
+     * what keeps the reader where it was.
+     */
+    private fun draw(
+        chapter: NovelReaderViewModel.LoadedChapter,
+        settings: NovelReaderSettings,
+        startFraction: Float,
+    ) {
+        this.settings = settings
+        recycler.setBackgroundColor(NovelTextStyle.parseColor(settings.backgroundColor, Color.WHITE))
+        val block = ChapterTextBlock(context) { createChunkView(settings) }
+        this.block = block
+        rendered = false
+        adapter.show(block)
+        pendingProgress = startFraction
+        renderer.render(
+            block = block,
+            html = chapter.html,
+            fontSize = settings.fontSize,
+            paragraphSpacing = settings.paragraphSpacing,
+            paragraphIndent = settings.paragraphIndent,
+            selectable = textSelectable,
+            refererUrl = chapter.baseUrl?.let { it.trimEnd('/') + "/" },
+            onTextSet = ::applyPendingProgress,
+        )
     }
 
     override fun seekTo(progress: ChapterProgress) {
@@ -129,6 +153,7 @@ class NovelTextViewport(
         scope.cancel()
         adapter.show(null)
         block = null
+        loaded = null
     }
 
     override fun handleKeyEvent(event: KeyEvent): Boolean = false
@@ -216,3 +241,6 @@ class NovelTextViewport(
         override fun getItemCount(): Int = if (shown == null) 0 else 1
     }
 }
+
+private fun NovelReaderSettings.paragraphShape() =
+    ParagraphShape(paragraphIndent, paragraphSpacing, fontSize)

@@ -72,6 +72,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Settings -> Novel reader can now tidy up a chapter before you read it.** Hide a heading that just repeats the chapter name, block images and video, split walls of text into paragraphs, force lowercase, and choose whether a chapter's own styling runs.
 - **Settings -> Novel reader can now open novels in the new shared reader, which is still in development.** The original reader stays the default, and a change applies the next time you open a chapter.
 - **Settings -> Novel reader can now skip chapters marked read, and skip filtered chapters, like manga.** Skipping applies going forward only, so the previous-chapter button still reaches the chapter you just finished.
+- **Settings -> Novel reader -> Text display can now indent your paragraphs and space them apart.** Both are multiples of your text size, so they keep their proportions when you change it, and both work in every reader.
 
 **Tracking**
 

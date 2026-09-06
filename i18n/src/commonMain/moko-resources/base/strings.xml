@@ -623,6 +623,12 @@
          says so; it becomes a plain renderer name once the old reader goes. -->
     <!-- RK: shown when a chapter fails to load while the reader is already open -->
     <string name="chapter_load_failed">Couldn\'t load this chapter</string>
+    <!-- RK: novel text display, applied by whichever renderer draws the chapter -->
+    <string name="pref_category_text_display">Text display</string>
+    <string name="pref_paragraph_indent">Paragraph indent</string>
+    <string name="pref_paragraph_indent_summary">Indents the first line of every paragraph</string>
+    <string name="pref_paragraph_spacing">Paragraph spacing</string>
+    <string name="pref_paragraph_spacing_summary">Extra space after each paragraph, on top of the usual gap</string>
     <!-- RK: the chapter-text pipeline, which processes a chapter's markup before it is rendered -->
     <string name="pref_category_chapter_text">Chapter text</string>
     <string name="pref_hide_chapter_title">Hide repeated chapter title</string>

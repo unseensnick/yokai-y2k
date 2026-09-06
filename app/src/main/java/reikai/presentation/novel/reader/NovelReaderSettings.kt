@@ -16,6 +16,10 @@ data class NovelReaderSettings(
     val lineHeight: Float,
     val textAlign: String,
     val padding: Int,
+    /** First-line indent, as a multiple of [fontSize]. */
+    val paragraphIndent: Float,
+    /** Gap after a paragraph, as a multiple of [fontSize]. */
+    val paragraphSpacing: Float,
     val fontFamily: String,
     val followSystemTheme: Boolean,
     val backgroundColor: String,

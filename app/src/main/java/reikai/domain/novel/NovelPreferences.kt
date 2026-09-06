@@ -123,6 +123,14 @@ class NovelPreferences(
     fun readerFontFamily() = preferenceStore.getString("ln_reader_font_family", "")
     fun readerPadding() = preferenceStore.getInt("ln_reader_padding", 16)
 
+    /**
+     * First-line indent and the gap after a paragraph, both as a multiple of the font size so they
+     * scale with it. Zero leaves the paragraph shape the markup already produces, which is what both
+     * readers showed before these existed.
+     */
+    fun readerParagraphIndent() = preferenceStore.getFloat("ln_reader_paragraph_indent", 0f)
+    fun readerParagraphSpacing() = preferenceStore.getFloat("ln_reader_paragraph_spacing", 0f)
+
     /** Hold the screen awake while reading (Android FLAG_KEEP_SCREEN_ON). Separate from the manga
      *  reader's key on purpose, not twin debt to unify: see docs/dev/plans/settings-restructure.md. */
     fun readerKeepScreenOn() = preferenceStore.getBoolean("ln_reader_keep_screen_on", false)

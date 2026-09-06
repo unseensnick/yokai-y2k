@@ -36,9 +36,45 @@ object SettingsNovelReaderScreen : SearchableSettings {
 
         return listOf(
             getReadingGroup(novelPreferences = novelPref),
+            getTextDisplayGroup(novelPreferences = novelPref),
             getChapterTextGroup(novelPreferences = novelPref),
             getNavigationGroup(novelPreferences = novelPref),
             getAccessibilityGroup(novelPreferences = novelPref),
+        )
+    }
+
+    /**
+     * Paragraph shape, applied by whichever renderer draws the chapter. Both are multiples of the
+     * text size, so they hold their proportions when it changes. Novel-only by mechanism: a manga
+     * page is an image the source ships, so there is no text for them to act on.
+     */
+    @Composable
+    private fun getTextDisplayGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
+        val indentPref = novelPreferences.readerParagraphIndent()
+        val spacingPref = novelPreferences.readerParagraphSpacing()
+        val indent by indentPref.collectAsState()
+        val spacing by spacingPref.collectAsState()
+
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_category_text_display),
+            preferenceItems = listOf(
+                Preference.PreferenceItem.SliderPreference(
+                    value = (indent * TENTHS).roundToInt(),
+                    valueRange = 0..50,
+                    title = stringResource(MR.strings.pref_paragraph_indent),
+                    subtitle = stringResource(MR.strings.pref_paragraph_indent_summary),
+                    valueString = "%.1fem".format(indent),
+                    onValueChanged = { indentPref.set(it / TENTHS) },
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    value = (spacing * TENTHS).roundToInt(),
+                    valueRange = 0..30,
+                    title = stringResource(MR.strings.pref_paragraph_spacing),
+                    subtitle = stringResource(MR.strings.pref_paragraph_spacing_summary),
+                    valueString = "%.1fem".format(spacing),
+                    onValueChanged = { spacingPref.set(it / TENTHS) },
+                ),
+            ),
         )
     }
 
@@ -224,3 +260,6 @@ object SettingsNovelReaderScreen : SearchableSettings {
             ),
         )
 }
+
+/** The slider rows are integers, so an em value rides across as tenths of one. */
+private const val TENTHS = 10f
