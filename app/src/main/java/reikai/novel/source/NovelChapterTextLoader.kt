@@ -1,8 +1,12 @@
 package reikai.novel.source
 
+import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.model.Novel
 import reikai.domain.novel.model.NovelChapter
+import reikai.novel.content.NovelContentConfig
+import reikai.novel.content.NovelContentPipeline
+import reikai.novel.content.RenderTarget
 import reikai.novel.install.LnPluginInstaller
 import java.util.Collections
 
@@ -16,9 +20,12 @@ class NovelChapterTextLoader(
     private val novelRepo: NovelRepository,
     private val sourceManager: NovelSourceManager,
     private val installer: LnPluginInstaller,
+    private val preferences: NovelPreferences,
     /** The downloaded copy, or null when the chapter is not on disk. */
     private val readDownloaded: (Novel, NovelChapter) -> String?,
 ) {
+
+    private val pipeline = NovelContentPipeline(preferences)
 
     private val sourcesByNovel: MutableMap<Long, NovelSource> =
         Collections.synchronizedMap(HashMap())
@@ -34,8 +41,22 @@ class NovelChapterTextLoader(
      * Downloaded chapter: read the self-contained HTML from disk (no source, null base URL, images
      * already inlined). Otherwise resolve the chapter's source and parse live, using the source site
      * as the base URL so relative image URLs resolve.
+     *
+     * What comes back is pipeline output, never raw source markup, so a renderer must not process it
+     * again. [RenderTarget.WEB_VIEW] because both readers are WebViews today.
      */
     suspend fun load(chapter: NovelChapter): Pair<String, String?> {
+        val (raw, baseUrl) = fetch(chapter)
+        val config = NovelContentConfig.from(
+            preferences = preferences,
+            target = RenderTarget.WEB_VIEW,
+            chapterUrl = chapter.url,
+            chapterName = chapter.name,
+        )
+        return pipeline.process(raw, config).text to baseUrl
+    }
+
+    private suspend fun fetch(chapter: NovelChapter): Pair<String, String?> {
         val novel = novelRepo.getById(chapter.novelId)
         if (novel != null) readDownloaded(novel, chapter)?.let { return it to null }
         val src = resolveSource(chapter.novelId)

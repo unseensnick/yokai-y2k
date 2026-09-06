@@ -109,6 +109,7 @@ class NovelReaderViewModel(
         novelRepo = novelRepo,
         sourceManager = sourceManager,
         installer = installer,
+        preferences = novelPreferences,
         readDownloaded = { novel, chapter -> downloadManager.getChapterText(novel, chapter) },
     )
 

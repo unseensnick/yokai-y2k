@@ -36,8 +36,63 @@ object SettingsNovelReaderScreen : SearchableSettings {
 
         return listOf(
             getReadingGroup(novelPreferences = novelPref),
+            getChapterTextGroup(novelPreferences = novelPref),
             getNavigationGroup(novelPreferences = novelPref),
             getAccessibilityGroup(novelPreferences = novelPref),
+        )
+    }
+
+    /**
+     * How a chapter's markup is processed before it is rendered, in the order the pipeline applies
+     * them. The two embedded-markup rows only bind while a WebView renders the chapter; a text
+     * renderer draws CSS and scripts as visible characters, so it strips them regardless.
+     */
+    @Composable
+    private fun getChapterTextGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
+        val autoSplitEnabled by novelPreferences.readerAutoSplitText().collectAsState()
+        val autoSplitWordCount by novelPreferences.readerAutoSplitWordCount().collectAsState()
+
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_category_chapter_text),
+            preferenceItems = listOfNotNull(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerHideChapterTitle(),
+                    title = stringResource(MR.strings.pref_hide_chapter_title),
+                    subtitle = stringResource(MR.strings.pref_hide_chapter_title_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerForceLowercase(),
+                    title = stringResource(MR.strings.pref_force_lowercase),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerBlockMedia(),
+                    title = stringResource(MR.strings.pref_block_media),
+                    subtitle = stringResource(MR.strings.pref_block_media_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerAutoSplitText(),
+                    title = stringResource(MR.strings.pref_auto_split_text),
+                    subtitle = stringResource(MR.strings.pref_auto_split_text_summary),
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    value = autoSplitWordCount,
+                    valueRange = 20..200,
+                    steps = 17,
+                    title = stringResource(MR.strings.pref_auto_split_word_count),
+                    subtitle = "%s",
+                    onValueChanged = { novelPreferences.readerAutoSplitWordCount().set(it) },
+                ).takeIf { autoSplitEnabled },
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerKeepEmbeddedCss(),
+                    title = stringResource(MR.strings.pref_keep_embedded_css),
+                    subtitle = stringResource(MR.strings.pref_keep_embedded_css_summary),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerKeepEmbeddedJs(),
+                    title = stringResource(MR.strings.pref_keep_embedded_js),
+                    subtitle = stringResource(MR.strings.pref_keep_embedded_js_summary),
+                ),
+            ),
         )
     }
 

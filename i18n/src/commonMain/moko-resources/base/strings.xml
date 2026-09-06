@@ -621,6 +621,20 @@
     <!-- RK: novel reader settings, surfaced as content-type sub-groups on the shared Reader screen -->
     <!-- RK: which reader a novel opens in. The second option is the shared host being built out, so it
          says so; it becomes a plain renderer name once the old reader goes. -->
+    <!-- RK: the chapter-text pipeline, which processes a chapter's markup before it is rendered -->
+    <string name="pref_category_chapter_text">Chapter text</string>
+    <string name="pref_hide_chapter_title">Hide repeated chapter title</string>
+    <string name="pref_hide_chapter_title_summary">Drop a heading at the top of a chapter that just repeats its name</string>
+    <string name="pref_force_lowercase">Force lowercase</string>
+    <string name="pref_block_media">Block images and video</string>
+    <string name="pref_block_media_summary">Skip media a chapter embeds, for text-only reading or to save data</string>
+    <string name="pref_keep_embedded_css">Use the chapter\'s own styling</string>
+    <string name="pref_keep_embedded_css_summary">Let a chapter\'s own CSS override your reader display settings</string>
+    <string name="pref_keep_embedded_js">Run scripts a chapter embeds</string>
+    <string name="pref_keep_embedded_js_summary">Off is safer: chapter markup comes from the source, not from Reikai</string>
+    <string name="pref_auto_split_text">Split walls of text</string>
+    <string name="pref_auto_split_text_summary">Add paragraph breaks to chapters that arrive as one unbroken block</string>
+    <string name="pref_auto_split_word_count">Words before a split</string>
     <string name="pref_novel_rendering_mode">Rendering mode</string>
     <string name="pref_novel_rendering_mode_legacy">Original reader</string>
     <string name="pref_novel_rendering_mode_webview">New reader (in development)</string>

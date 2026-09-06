@@ -265,6 +265,36 @@ class NovelPreferences(
     fun readerBottomButtons() =
         preferenceStore.getStringSet("ln_reader_bottom_buttons", ReaderBottomButton.NOVEL_BUTTONS_DEFAULTS)
 
+    // Chapter text pipeline. Applied to the chapter body before it is rendered, in the order
+    // [reikai.novel.content.NovelContentPipeline] runs its stages.
+
+    /** Drop a heading at the top of the body that repeats the chapter name the reader already shows. */
+    fun readerHideChapterTitle() = preferenceStore.getBoolean("ln_reader_hide_chapter_title", false)
+
+    /** Lowercase the whole chapter body. */
+    fun readerForceLowercase() = preferenceStore.getBoolean("ln_reader_force_lowercase", false)
+
+    /** Strip `img` / `video` / `audio` tags from the chapter body. */
+    fun readerBlockMedia() = preferenceStore.getBoolean("ln_reader_block_media", false)
+
+    /** Keep a chapter's own `style` blocks and stylesheet links. Only a WebView renderer can honour
+     *  this: a TextView draws CSS as visible text, so it strips it whatever this says. */
+    fun readerKeepEmbeddedCss() = preferenceStore.getBoolean("ln_reader_keep_embedded_css", true)
+
+    /** Keep a chapter's own `script` blocks. Off by default: source markup is untrusted. */
+    fun readerKeepEmbeddedJs() = preferenceStore.getBoolean("ln_reader_keep_embedded_js", false)
+
+    /** Insert paragraph breaks into chapters that arrive as one unbroken block of text. */
+    fun readerAutoSplitText() = preferenceStore.getBoolean("ln_reader_auto_split_text", false)
+
+    /** Words to pass before an auto-split break looks for the next sentence end. The splitter floors
+     *  this at 20, so a smaller value does not shred the text. */
+    fun readerAutoSplitWordCount() = preferenceStore.getInt("ln_reader_auto_split_word_count", 50)
+
+    /** User find/replace rules, a JSON array of [reikai.novel.content.NovelRegexReplacement]. No editor
+     *  UI yet, so this stays at its empty default and the pipeline stage is a no-op. */
+    fun readerRegexReplacements() = preferenceStore.getString("ln_reader_regex_replacements", "[]")
+
     // Library.
 
     /** Category a newly favorited novel auto-lands in, the novel twin of manga's
