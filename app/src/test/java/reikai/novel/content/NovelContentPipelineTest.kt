@@ -67,6 +67,25 @@ class NovelContentPipelineTest {
         html shouldContain "<p>One line\nnext line</p>"
     }
 
+    /**
+     * Found on device: with the chapter's own styling turned off, the sanitiser's Jsoup round-trip
+     * pretty-printed the document and collapsed the line breaks inside a plain-text paragraph.
+     */
+    @Test
+    fun `stripping chapter styling does not reflow the chapter`() {
+        val input = NovelHtmlUtils.plainTextToHtml("First line\nsecond line")
+
+        val stripped = NovelHtmlUtils.sanitizeForRender(
+            input,
+            target = RenderTarget.WEB_VIEW,
+            keepEmbeddedCss = false,
+            keepEmbeddedJs = false,
+            blockMedia = false,
+        )
+
+        stripped shouldContain "First line\nsecond line"
+    }
+
     @Test
     fun `a script block is stripped from an HTML chapter by default`() = runTest {
         val processed = pipeline.process("<p>a</p><script>evil()</script>", config("/book/ch1.html"))

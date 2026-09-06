@@ -250,6 +250,9 @@ object NovelHtmlUtils {
                 result = result.replace(linkStylesheetRegex2, "")
                 try {
                     val doc = Jsoup.parseBodyFragment(result)
+                    // Pretty-printing reflows the markup, which collapses the line breaks inside a
+                    // plain-text paragraph. Stripping an attribute must not rewrite the document.
+                    doc.outputSettings().prettyPrint(false)
                     doc.body().select("*").removeAttr("style")
                     result = doc.body().html()
                 } catch (_: Exception) {
