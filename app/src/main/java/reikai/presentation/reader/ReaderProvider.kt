@@ -39,6 +39,21 @@ interface ReaderProvider {
 
     suspend fun nextChapter()
 
+    /**
+     * Whether the open chapter is bookmarked, and the verb that flips it. Every content type has
+     * chapters and every one can bookmark them, so the bar asks the session rather than reading one
+     * engine's model, which is how this control ended up permanently empty for novels.
+     */
+    val bookmarked: Flow<Boolean>
+
+    fun toggleBookmark()
+
+    /**
+     * The open chapter's page on the source site, or null where it has none. Null hides the web,
+     * browser and share actions rather than showing them dead, which is the capability-slot rule.
+     */
+    val webUrl: Flow<String?>
+
     /** The chapter sheet's rows and its verbs, which every content type has. */
     val chapterList: ReaderChapterList
 

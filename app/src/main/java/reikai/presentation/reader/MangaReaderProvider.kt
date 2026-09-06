@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -56,6 +57,17 @@ class MangaReaderProvider(
             hasNext = state.viewerChapters?.nextChapter != null,
         )
     }
+
+    override val bookmarked: Flow<Boolean> = viewModel.state.map { it.bookmarked }
+
+    override fun toggleBookmark() = viewModel.toggleChapterBookmark()
+
+    // Re-read per chapter rather than per state emission: the source builds the URL, and the chapter
+    // is the only thing about it that changes while a session runs.
+    override val webUrl: Flow<String?> = viewModel.state
+        .map { it.viewerChapters?.currChapter?.chapter?.id }
+        .distinctUntilChanged()
+        .map { viewModel.getChapterUrl() }
 
     override suspend fun previousChapter() = viewModel.loadPreviousChapter()
 

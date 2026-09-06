@@ -55,6 +55,16 @@ class ReaderEngine(
     val navigator: StateFlow<ReaderNavigatorState> =
         provider.navigator.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderNavigatorState())
 
+    /** Whether the open chapter is bookmarked, so the bar's control reflects this session's chapter. */
+    val bookmarked: StateFlow<Boolean> =
+        provider.bookmarked.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun toggleBookmark() = provider.toggleBookmark()
+
+    /** The open chapter's page on the source site, null where it has none. */
+    val webUrl: StateFlow<String?> =
+        provider.webUrl.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     /** Scrubbing goes to the viewport rather than the provider, since only it can move the reader. */
     fun seek(progress: ChapterProgress) {
         viewport.value?.seekTo(progress)

@@ -242,6 +242,8 @@ class NovelReaderViewModel(
     data class LoadedChapter(
         val chapterId: Long,
         val title: String,
+        /** The chapter path on its source, for the web actions. */
+        val url: String,
         val html: String,
         val baseUrl: String?,
         val progressPercent: Int,
@@ -336,10 +338,12 @@ class NovelReaderViewModel(
                 val row = chapterRepo.getById(currentChapterId) ?: error("Chapter not found: $currentChapterId")
                 currentNovelId = row.novelId
                 chapterReadStartTime = System.currentTimeMillis()
+                bookmarkedState.value = row.bookmark
                 val (html, baseUrl) = htmlCache[row.id] ?: loadChapterHtml(row).also { htmlCache[row.id] = it }
                 loadedChapter.value = LoadedChapter(
                     chapterId = row.id,
                     title = row.name,
+                    url = row.url,
                     html = html,
                     baseUrl = baseUrl,
                     // Stored as 0..10000 (hundredths of a percent); the web layer wants 0..100.
@@ -502,8 +506,23 @@ class NovelReaderViewModel(
     }
 
     fun setChapterBookmark(chapterId: Long, bookmarked: Boolean) {
+        // Kept in step so the sheet and the app bar cannot disagree about the chapter being read.
+        if (chapterId == currentChapterId) bookmarkedState.value = bookmarked
         viewModelScope.launchIO { chapterRepo.setBookmark(chapterId, bookmarked) }
     }
+
+    /** The open chapter's bookmark state, seeded when it loads and flipped from the bar or the sheet. */
+    private val bookmarkedState = MutableStateFlow(false)
+    val bookmarked: StateFlow<Boolean> = bookmarkedState
+
+    fun toggleBookmark() = setChapterBookmark(currentChapterId, !bookmarkedState.value)
+
+    /**
+     * [chapter]'s page on the source site, or null for one read from disk whose source this session
+     * never resolved, which is the case the web actions have to hide rather than open empty.
+     */
+    fun webUrlFor(chapter: LoadedChapter): String? =
+        textLoader.cachedSource(currentNovelId)?.webUrl(chapter.url)
 
     /** Start, cancel or delete a chapter download from the sheet, mirroring the details model. */
     fun downloadChapter(chapterId: Long, action: ChapterDownloadAction) {

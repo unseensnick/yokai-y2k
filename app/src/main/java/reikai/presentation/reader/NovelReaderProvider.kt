@@ -42,6 +42,12 @@ class NovelReaderProvider(
         )
     }
 
+    override val bookmarked: Flow<Boolean> = viewModel.bookmarked
+
+    override fun toggleBookmark() = viewModel.toggleBookmark()
+
+    override val webUrl: Flow<String?> = viewModel.chapter.map { it?.let(viewModel::webUrlFor) }
+
     override suspend fun previousChapter() = viewModel.previousChapter()
 
     override suspend fun nextChapter() = viewModel.nextChapter()

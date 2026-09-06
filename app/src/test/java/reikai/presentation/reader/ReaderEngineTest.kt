@@ -267,6 +267,14 @@ private class FakeReaderProvider : ReaderProvider {
 
     override val navigator = MutableStateFlow(ReaderNavigatorState())
 
+    override val bookmarked = MutableStateFlow(false)
+
+    override val webUrl = MutableStateFlow<String?>(null)
+
+    override fun toggleBookmark() {
+        bookmarked.value = !bookmarked.value
+    }
+
     override fun setOrientation(flagValue: Int) {
         orientation.value = flagValue
     }

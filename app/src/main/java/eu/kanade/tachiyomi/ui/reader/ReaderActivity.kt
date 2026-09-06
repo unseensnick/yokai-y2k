@@ -752,6 +752,8 @@ class ReaderActivity : BaseActivity() {
 
         // RK: from the engine, so a novel session offers its own actions rather than manga's.
         val bottomButtons by engine.bottomButtons.collectAsState()
+        val bookmarked by engine.bookmarked.collectAsState()
+        val webUrl by engine.webUrl.collectAsState()
         val navigator by engine.navigator.collectAsState()
         val orientation by engine.orientation.collectAsState()
         val keepScreenOn by engine.keepScreenOn.collectAsState()
@@ -764,11 +766,13 @@ class ReaderActivity : BaseActivity() {
             chapterTitle = chrome.chapterTitle,
             navigateUp = onBackPressedDispatcher::onBackPressed,
             onClickTopAppBar = ::openMangaScreen,
-            bookmarked = state.bookmarked,
-            onToggleBookmarked = viewModel::toggleChapterBookmark,
-            onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
-            onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
-            onShare = ::shareChapter.takeIf { isHttpSource },
+            // RK: from the engine, so the control reflects the chapter this session has open. Reading
+            // manga's model left it permanently empty and its tap a no-op for a novel.
+            bookmarked = bookmarked,
+            onToggleBookmarked = engine::toggleBookmark,
+            onOpenInWebView = { openChapterInWebView(webUrl) }.takeIf { webUrl != null },
+            onOpenInBrowser = { openChapterInBrowser(webUrl) }.takeIf { webUrl != null },
+            onShare = { shareChapter(webUrl) }.takeIf { webUrl != null },
 
             // RK: the shape is the session's answer, and the direction is asked of the viewer
             // contract, so the host neither reads manga's preference nor instance-checks a viewer.
@@ -895,26 +899,21 @@ class ReaderActivity : BaseActivity() {
         }
     }
 
-    private fun openChapterInWebView() {
-        val manga = viewModel.manga ?: return
-        val source = viewModel.getSource() ?: return
-        assistUrl?.let {
-            val intent = WebViewActivity.newIntent(this@ReaderActivity, it, source.id, manga.title)
-            startActivity(intent)
-        }
+    // RK: the URL is the session's answer rather than manga's, so a novel opens its own chapter page.
+    // The source id is manga's only: it lets the WebView reuse that source's headers, and a novel
+    // source has no numeric id, so it opens without one exactly as the standalone reader did.
+    private fun openChapterInWebView(url: String?) {
+        val target = url ?: return
+        val title = engine.chrome.value.entryTitle
+        startActivity(WebViewActivity.newIntent(this, target, viewModel.getSource()?.id, title))
     }
 
-    private fun openChapterInBrowser() {
-        assistUrl?.let {
-            openInBrowser(it.toUri(), forceDefaultBrowser = false)
-        }
+    private fun openChapterInBrowser(url: String?) {
+        url?.let { openInBrowser(it.toUri(), forceDefaultBrowser = false) }
     }
 
-    private fun shareChapter() {
-        assistUrl?.let {
-            val intent = it.toUri().toShareIntent(this, type = "text/plain")
-            startActivity(intent)
-        }
+    private fun shareChapter(url: String?) {
+        url?.let { startActivity(it.toUri().toShareIntent(this, type = "text/plain")) }
     }
 
     private fun showReadingModeToast(mode: Int) {
