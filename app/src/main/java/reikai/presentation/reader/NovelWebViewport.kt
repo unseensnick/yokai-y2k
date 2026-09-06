@@ -9,6 +9,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import logcat.logcat
@@ -128,23 +130,29 @@ class NovelWebViewport(
      * theme (see `resolveReaderThemeColors`), and the cutout inset is a CSS variable only this
      * document has.
      */
-    override fun load(
+    override suspend fun load(
         chapter: NovelReaderViewModel.LoadedChapter,
         hasPrevious: Boolean,
         hasNext: Boolean,
         settings: NovelReaderSettings,
     ) {
-        val html = buildReaderHtml(
-            chapterHtml = chapter.html,
-            chapterName = chapter.title,
-            progressPercent = chapter.progressPercent,
-            hasPrev = hasPrevious,
-            hasNext = hasNext,
-            settings = settings,
-            colors = context.resolveReaderThemeColors(),
-            statusBarHeightPx = statusBarHeightPx(),
-            debug = BuildConfig.DEBUG,
-        )
+        // Both reads need the window, so they happen here; the document itself is built off the main
+        // thread, because a downloaded chapter has its images inlined and the string runs to megabytes.
+        val colors = context.resolveReaderThemeColors()
+        val statusBarPx = statusBarHeightPx()
+        val html = withContext(Dispatchers.Default) {
+            buildReaderHtml(
+                chapterHtml = chapter.html,
+                chapterName = chapter.title,
+                progressPercent = chapter.progressPercent,
+                hasPrev = hasPrevious,
+                hasNext = hasNext,
+                settings = settings,
+                colors = colors,
+                statusBarHeightPx = statusBarPx,
+                debug = BuildConfig.DEBUG,
+            )
+        }
         // The document is built with these, so a later push of the same general block is a no-op.
         lastGeneralSettings = generalSettingsJson(settings).toString()
         // Only trust an http(s) base URL. The plugin controls the site URL, and with allowFileAccess on

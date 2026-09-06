@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import logcat.logcat
 import kotlin.math.roundToInt
 
@@ -83,20 +85,6 @@ fun NovelReaderWebView(
     // Keyed on chapter + app theme only (NOT settings): settings changes push live instead of
     // reloading. The initial document bakes in the settings present at build time.
     val currentSettings = rememberUpdatedState(settings)
-    val document = remember(html, themeColors, chapterTitle, initialProgressPercent, hasPrev, hasNext, topInsetDp) {
-        buildReaderHtml(
-            chapterHtml = html,
-            chapterName = chapterTitle,
-            progressPercent = initialProgressPercent,
-            hasPrev = hasPrev,
-            hasNext = hasNext,
-            settings = currentSettings.value,
-            colors = themeColors,
-            statusBarHeightPx = topInsetDp,
-            debug = BuildConfig.DEBUG,
-        )
-    }
-
     val onToggle = rememberUpdatedState(onToggleMenu)
     val onSave = rememberUpdatedState(onSaveProgress)
     val onProgressLive = rememberUpdatedState(onProgressChanged)
@@ -165,7 +153,23 @@ fun NovelReaderWebView(
         webView.evaluateJavascript(js, null)
     }
 
-    LaunchedEffect(document, baseUrl) {
+    // Keyed on chapter + app theme only (NOT settings): settings changes push live instead of
+    // reloading, and the document bakes in whatever was set when it was built. The build is off the
+    // main thread because a downloaded chapter has its images inlined, so the string runs to megabytes.
+    LaunchedEffect(html, themeColors, chapterTitle, initialProgressPercent, hasPrev, hasNext, topInsetDp, baseUrl) {
+        val document = withContext(Dispatchers.Default) {
+            buildReaderHtml(
+                chapterHtml = html,
+                chapterName = chapterTitle,
+                progressPercent = initialProgressPercent,
+                hasPrev = hasPrev,
+                hasNext = hasNext,
+                settings = currentSettings.value,
+                colors = themeColors,
+                statusBarHeightPx = topInsetDp,
+                debug = BuildConfig.DEBUG,
+            )
+        }
         // Only trust an http(s) base URL. src.site is plugin-controlled, and with allowFileAccess on
         // a file:// base would give the chapter document a file origin; pin the scheme so the safety
         // doesn't rest solely on the file-from-file WebView flags staying default-off.

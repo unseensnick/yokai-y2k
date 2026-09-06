@@ -15,8 +15,11 @@ interface TextViewport {
     /**
      * Renders [chapter]. The neighbour flags are the session's, not the chapter's, so a renderer that
      * offers its own way forward can show it without asking the model.
+     *
+     * Suspending because building the document is proportional to the chapter, and a downloaded one
+     * carries its images inline. Implementations do that work off the main thread.
      */
-    fun load(
+    suspend fun load(
         chapter: NovelReaderViewModel.LoadedChapter,
         hasPrevious: Boolean,
         hasNext: Boolean,
