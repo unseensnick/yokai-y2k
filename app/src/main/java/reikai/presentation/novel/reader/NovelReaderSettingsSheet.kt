@@ -63,6 +63,11 @@ import reikai.presentation.icons.FormatAlignJustify
 import reikai.presentation.icons.FormatAlignLeft
 import reikai.presentation.icons.FormatAlignRight
 import reikai.presentation.icons.ReikaiIcons
+import reikai.presentation.reader.PresetSwatch
+import reikai.presentation.reader.ReaderThemePreset
+import reikai.presentation.reader.readerDarkPreset
+import reikai.presentation.reader.readerLightPreset
+import reikai.presentation.reader.readerThemePresets
 import tachiyomi.presentation.core.components.lockPagerSwipeWhileDragging
 import tachiyomi.presentation.core.i18n.stringResource
 import java.util.Locale
@@ -554,27 +559,6 @@ private fun AlignButton(icon: ImageVector, value: String, current: String, onCli
             contentDescription = value,
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-fun PresetSwatch(preset: ReaderThemePreset, selected: Boolean, onClick: () -> Unit) {
-    val bg = remember(preset.background) { Color(android.graphics.Color.parseColor(preset.background)) }
-    val fg = remember(preset.textColor) { Color(android.graphics.Color.parseColor(preset.textColor)) }
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(bg)
-            .border(
-                width = if (selected) 3.dp else 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                shape = CircleShape,
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("A", color = fg, fontWeight = FontWeight.Bold)
     }
 }
 

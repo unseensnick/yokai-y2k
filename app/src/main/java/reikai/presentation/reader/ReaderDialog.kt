@@ -28,6 +28,12 @@ sealed interface ReaderDialog {
      * take no argument: each instance is already bound to its page.
      */
     data class PageActions(val actions: ReaderPageActions) : ReaderDialog
+
+    /** Both carry the typography capability for the same reason: a type that builds none cannot
+     *  raise them, so the buttons are absent rather than opening a picker over nothing. */
+    data class TextSize(val settings: ReaderTextSettings) : ReaderDialog
+
+    data class ThemeSelect(val settings: ReaderTextSettings) : ReaderDialog
 }
 
 /**

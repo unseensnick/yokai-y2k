@@ -38,6 +38,10 @@ import reikai.novel.download.NovelDownloadManager
 import reikai.novel.install.LnPluginInstaller
 import reikai.novel.source.NovelSource
 import reikai.novel.source.NovelSourceManager
+import reikai.presentation.reader.ReaderThemePreset
+import reikai.presentation.reader.readerDarkPreset
+import reikai.presentation.reader.readerLightPreset
+import reikai.presentation.reader.readerThemePresets
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.library.service.LibraryPreferences
 import uy.kohesive.injekt.Injekt

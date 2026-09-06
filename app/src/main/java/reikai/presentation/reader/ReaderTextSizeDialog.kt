@@ -1,4 +1,4 @@
-package reikai.presentation.novel.reader
+package reikai.presentation.reader
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -18,7 +18,7 @@ import tachiyomi.presentation.core.i18n.stringResource
  * and the reader reflows the text in place).
  */
 @Composable
-fun NovelReaderTextSizeDialog(
+fun ReaderTextSizeDialog(
     fontSize: Int,
     onFontSize: (Int) -> Unit,
     onDismiss: () -> Unit,

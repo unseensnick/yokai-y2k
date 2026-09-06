@@ -89,6 +89,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -111,6 +112,8 @@ import reikai.presentation.reader.ReaderChapterListDialog
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
 import reikai.presentation.reader.ReaderOrientationDialog
+import reikai.presentation.reader.ReaderTextSizeDialog
+import reikai.presentation.reader.ReaderThemeDialog
 import reikai.presentation.reader.putEntryId
 import reikai.presentation.reader.readEntryId
 import reikai.presentation.reader.resolveReaderThemeColors
@@ -503,6 +506,30 @@ class ReaderActivity : BaseActivity() {
                     )
                 }
                 // RK -->
+                is ReaderDialog.TextSize -> {
+                    val text by dialog.settings.state.collectAsState(null)
+                    text?.let {
+                        ReaderTextSizeDialog(
+                            fontSize = it.fontSize,
+                            onFontSize = dialog.settings::setFontSize,
+                            onDismiss = onDismissRequest,
+                        )
+                    }
+                }
+                is ReaderDialog.ThemeSelect -> {
+                    val text by dialog.settings.state.collectAsState(null)
+                    text?.let {
+                        ReaderThemeDialog(
+                            followSystemTheme = it.followSystemTheme,
+                            backgroundColor = it.backgroundColor,
+                            onFollowSystem = dialog.settings::followSystemTheme,
+                            onPreset = { preset ->
+                                dialog.settings.setThemeColors(preset.background, preset.textColor)
+                            },
+                            onDismiss = onDismissRequest,
+                        )
+                    }
+                }
                 // RK: over the session's own chapter list, so a novel gets its chapters here too.
                 is ReaderDialog.ChapterList -> {
                     val chapterList = engine.chapterList
@@ -549,29 +576,38 @@ class ReaderActivity : BaseActivity() {
      */
     private fun loadNovelChapters(provider: NovelReaderProvider, viewport: NovelWebViewport) {
         val model = provider.viewModel
+        // "Auto" resolves to a preset here; the stored colours are only what a manual choice left
+        // behind, so a document built from them would show the wrong shade.
+        val resolvedSettings = model.settings.map { it.resolvedForSystemTheme(isNightMode()) }
         model.chapter
             .filterNotNull()
             .distinctUntilChanged()
             .onEach { chapter ->
+                val neighbours = model.chapterNeighbours.value
                 viewport.load(
                     html = buildReaderHtml(
                         chapterHtml = chapter.html,
                         chapterName = chapter.title,
                         progressPercent = chapter.progressPercent,
-                        // Neighbour resolution is not on this model yet, and the bundled page chrome
-                        // that would use these is deliberately not loaded.
-                        hasPrev = false,
-                        hasNext = false,
-                        // "Auto" resolves to a preset at render time; the stored colours are only
-                        // what a manual choice left behind.
-                        settings = model.settings.value.resolvedForSystemTheme(isNightMode()),
+                        hasPrev = neighbours.previous != null,
+                        hasNext = neighbours.next != null,
+                        settings = resolvedSettings.first(),
                         colors = resolveReaderThemeColors(),
                         statusBarHeightPx = displayCutoutTopDp(),
                         debug = BuildConfig.DEBUG,
                     ),
                     baseUrl = chapter.baseUrl,
+                    settings = resolvedSettings.first(),
                 )
             }
+            .launchIn(lifecycleScope)
+
+        // Changing a display setting reflows the open chapter in place. The first emission is what the
+        // document was just built with, so it is dropped rather than pushed straight back.
+        resolvedSettings
+            .distinctUntilChanged()
+            .drop(1)
+            .onEach(viewport::applySettings)
             .launchIn(lifecycleScope)
     }
 
@@ -788,6 +824,10 @@ class ReaderActivity : BaseActivity() {
             onClickChapterList = { engine.openDialog(ReaderDialog.ChapterList) },
             keepScreenOn = keepScreenOn,
             onClickKeepScreenOn = { engine.setKeepScreenOn(!keepScreenOn) },
+            // Null where the session renders images, which is what leaves the two typography buttons
+            // off the bar for manga rather than opening a picker over nothing.
+            onClickTextSize = engine.textSettings?.let { { engine.openDialog(ReaderDialog.TextSize(it)) } },
+            onClickTheme = engine.textSettings?.let { { engine.openDialog(ReaderDialog.ThemeSelect(it)) } },
             // RK <--
         )
     }

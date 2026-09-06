@@ -14,7 +14,10 @@ import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import logcat.logcat
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
+import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.novel.reader.NovelReaderWebInterface
+import reikai.presentation.novel.reader.generalSettingsJson
+import reikai.presentation.novel.reader.readerSettingsJson
 import kotlin.math.roundToInt
 
 /**
@@ -34,6 +37,10 @@ class NovelWebViewport(
     private val onProgressSettled: (Int) -> Unit,
     private val onToggleMenu: () -> Unit,
 ) : ReaderViewport {
+
+    /** The general block the live document was last given, so a push that would rebuild its DOM only
+     *  happens when something in that block actually changed. */
+    private var lastGeneralSettings: String? = null
 
     // Bridge messages arrive on a WebView background thread, so UI-affecting callbacks marshal here.
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -101,11 +108,34 @@ class NovelWebViewport(
 
     override fun handleGenericMotionEvent(event: MotionEvent): Boolean = false
 
-    fun load(html: String, baseUrl: String?) {
+    fun load(html: String, baseUrl: String?, settings: NovelReaderSettings) {
+        // The document is built with these, so a later push of the same general block is a no-op.
+        lastGeneralSettings = generalSettingsJson(settings).toString()
         // Only trust an http(s) base URL. The plugin controls the site URL, and with allowFileAccess on
         // a file:// base would hand the chapter document a file origin.
         val safeBaseUrl = baseUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         webView.loadDataWithBaseURL(safeBaseUrl, html, "text/html", "UTF-8", null)
+    }
+
+    /**
+     * Pushes changed display settings into the live document, so a size or colour change reflows in
+     * place rather than waiting for the next chapter.
+     *
+     * The display block is reassigned freely, since its watchers only rewrite CSS variables. The
+     * general block is reassigned only when it actually differs, because a `core.js` watcher rebuilds
+     * the chapter DOM on any change to it.
+     */
+    fun applySettings(settings: NovelReaderSettings) {
+        val generalJson = generalSettingsJson(settings).toString()
+        val pushGeneral = generalJson != lastGeneralSettings
+        if (pushGeneral) lastGeneralSettings = generalJson
+        val script = buildString {
+            append("if (window.reader) { reader.readerSettings.val = ")
+            append(readerSettingsJson(settings).toString()).append(';')
+            if (pushGeneral) append(" reader.generalSettings.val = ").append(generalJson).append(';')
+            append(" }")
+        }
+        webView.evaluateJavascript(script, null)
     }
 
     /** Smooth-scrolls the viewport by a signed fraction (positive = forward), reusing the WebView's own

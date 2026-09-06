@@ -136,6 +136,10 @@ class MangaReaderProvider(
         )
     }
 
+    // A manga page is an image the source ships, so there is no text for a size or a page colour to
+    // act on. The buttons are absent rather than shown doing nothing.
+    override val textSettings: ReaderTextSettings? = null
+
     // Unresolved, because the picker's "use default" action has to be able to tell a series following
     // the default from one pinned to the same value the default happens to be.
     override val orientation: Flow<Int> = viewModel.state

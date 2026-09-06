@@ -140,6 +140,17 @@ class NovelReaderViewModel(
 
     fun setKeepScreenOn(enabled: Boolean) = novelPreferences.readerKeepScreenOn().set(enabled)
 
+    fun setFontSize(size: Int) = novelPreferences.readerFontSize().set(size)
+
+    fun setFollowSystemTheme() = novelPreferences.readerFollowSystemTheme().set(true)
+
+    /** Choosing a colour is choosing it over "Auto", so the follow-system flag clears with it. */
+    fun setThemeColors(background: String, textColor: String) {
+        novelPreferences.readerFollowSystemTheme().set(false)
+        novelPreferences.readerBackgroundColor().set(background)
+        novelPreferences.readerTextColor().set(textColor)
+    }
+
     /** Reactive reader display settings; the screen resolves follow-system into colors. */
     val settings: StateFlow<NovelReaderSettings> = combine(
         combine(

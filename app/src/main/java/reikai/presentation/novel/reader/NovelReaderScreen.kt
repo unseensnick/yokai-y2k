@@ -68,6 +68,8 @@ import reikai.presentation.reader.ReaderActionRow
 import reikai.presentation.reader.ReaderChapterListDialog
 import reikai.presentation.reader.ReaderChapterRow
 import reikai.presentation.reader.ReaderOrientationDialog
+import reikai.presentation.reader.ReaderTextSizeDialog
+import reikai.presentation.reader.ReaderThemeDialog
 import reikai.presentation.reader.VerticalReaderRail
 import reikai.presentation.reader.readerBarEnter
 import reikai.presentation.reader.readerBarExit
@@ -563,7 +565,7 @@ class NovelReaderScreen(
         }
 
         if (themeOpen) {
-            NovelReaderThemeDialog(
+            ReaderThemeDialog(
                 followSystemTheme = rawSettings.followSystemTheme,
                 backgroundColor = rawSettings.backgroundColor,
                 onFollowSystem = screenModel::setFollowSystemTheme,
@@ -573,7 +575,7 @@ class NovelReaderScreen(
         }
 
         if (textSizeOpen) {
-            NovelReaderTextSizeDialog(
+            ReaderTextSizeDialog(
                 fontSize = settings.fontSize,
                 onFontSize = screenModel::setFontSize,
                 onDismiss = { textSizeOpen = false },

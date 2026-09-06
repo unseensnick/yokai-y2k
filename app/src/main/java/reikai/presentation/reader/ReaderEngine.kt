@@ -66,6 +66,9 @@ class ReaderEngine(
     /** The chapter sheet's rows and verbs, for whichever content type this session is. */
     val chapterList: ReaderChapterList get() = provider.chapterList
 
+    /** Typography, or null where this session's pages are images. */
+    val textSettings: ReaderTextSettings? get() = provider.textSettings
+
     fun previousChapter() = stepChapter { provider.previousChapter() }
 
     fun nextChapter() = stepChapter { provider.nextChapter() }

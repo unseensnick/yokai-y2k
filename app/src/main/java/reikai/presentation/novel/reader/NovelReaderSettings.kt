@@ -1,6 +1,10 @@
 package reikai.presentation.novel.reader
 
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
+import reikai.presentation.reader.ReaderThemePreset
+import reikai.presentation.reader.readerDarkPreset
+import reikai.presentation.reader.readerLightPreset
+import reikai.presentation.reader.readerThemePresets
 
 /**
  * Resolved reader display settings fed to the WebView (the LNReader `ChapterReaderSettings` subset
@@ -64,22 +68,6 @@ data class NovelReaderOverlaySettings(
  *  concrete locks. Reverse-portrait is dropped (rarely wanted); the global-default Settings list
  *  additionally drops Default. */
 val readerOrientations = ReaderOrientation.entries.filter { it != ReaderOrientation.REVERSE_PORTRAIT }
-
-/** A reader background + text color pairing. Tapping one in the settings sheet writes both. */
-data class ReaderThemePreset(val name: String, val background: String, val textColor: String)
-
-/** The five presets from LNReader (light, sepia, mint, dark, black). */
-val readerThemePresets = listOf(
-    ReaderThemePreset("Light", "#f5f5fa", "#111111"),
-    ReaderThemePreset("Sepia", "#F7DFC6", "#593100"),
-    ReaderThemePreset("Mint", "#dce5e2", "#000000"),
-    ReaderThemePreset("Dark", "#292832", "#CCCCCC"),
-    ReaderThemePreset("Black", "#000000", "#FFFFFFB3"),
-)
-
-/** Presets used by the "Auto" (follow-system) option for light and dark system modes. */
-val readerLightPreset = readerThemePresets.first { it.name == "Light" }
-val readerDarkPreset = readerThemePresets.first { it.name == "Dark" }
 
 /**
  * Applies the "Auto" theme option, which every reader owes before it renders. The stored colours are

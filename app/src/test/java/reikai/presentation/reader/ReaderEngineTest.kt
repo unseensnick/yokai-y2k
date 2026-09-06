@@ -263,6 +263,8 @@ private class FakeReaderProvider : ReaderProvider {
 
     override val keepScreenOn = MutableStateFlow(false)
 
+    override val textSettings: ReaderTextSettings? = null
+
     override val navigator = MutableStateFlow(ReaderNavigatorState())
 
     override fun setOrientation(flagValue: Int) {

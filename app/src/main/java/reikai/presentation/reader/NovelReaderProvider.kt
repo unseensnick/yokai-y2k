@@ -62,6 +62,21 @@ class NovelReaderProvider(
             viewModel.downloadChapter(chapterId, action)
     }
 
+    override val textSettings: ReaderTextSettings = object : ReaderTextSettings {
+        override val state: Flow<ReaderTextState> = viewModel.settings.map {
+            // The stored colour, not the resolved one: the picker marks what was chosen, and "Auto"
+            // is a choice of its own rather than whichever preset it resolves to right now.
+            ReaderTextState(it.fontSize, it.followSystemTheme, it.backgroundColor)
+        }
+
+        override fun setFontSize(size: Int) = viewModel.setFontSize(size)
+
+        override fun followSystemTheme() = viewModel.setFollowSystemTheme()
+
+        override fun setThemeColors(background: String, textColor: String) =
+            viewModel.setThemeColors(background, textColor)
+    }
+
     override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }
 
     override val keepScreenOn: Flow<Boolean> = viewModel.settings.map { it.keepScreenOn }
