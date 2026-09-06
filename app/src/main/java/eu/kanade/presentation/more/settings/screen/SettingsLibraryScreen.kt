@@ -74,7 +74,7 @@ object SettingsLibraryScreen : SearchableSettings {
             getGlobalUpdateGroup(allCategories, libraryPreferences),
             // RK: background light-novel chapter updates
             getNovelUpdateGroup(novelPreferences, novelCategories),
-            getBehaviorGroup(libraryPreferences),
+            getBehaviorGroup(libraryPreferences, novelPreferences),
             // RK: merge-group preferred-source ranking
             getSourcesGroup(LocalNavigator.currentOrThrow, reikaiLibraryPreferences),
         )
@@ -162,11 +162,6 @@ object SettingsLibraryScreen : SearchableSettings {
                         MANGA_NON_READ to stringResource(MR.strings.pref_update_only_started),
                     ),
                     title = stringResource(MR.strings.pref_library_update_smart_update),
-                ),
-                // RK: novel twin of manga's hide-missing-chapter-indicators toggle (same string).
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = novelPreferences.hideMissingChapters(),
-                    title = stringResource(MR.strings.pref_hide_missing_chapter_indicators),
                 ),
             ),
         )
@@ -396,6 +391,9 @@ object SettingsLibraryScreen : SearchableSettings {
     @Composable
     private fun getBehaviorGroup(
         libraryPreferences: LibraryPreferences,
+        // RK: the novel twin of the missing-chapter toggle sits here too, so the pair reads as one
+        // setting per content type rather than a row that looks duplicated.
+        novelPreferences: NovelPreferences,
     ): Preference.PreferenceGroup {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_behavior),
@@ -440,8 +438,21 @@ object SettingsLibraryScreen : SearchableSettings {
                 ),
                 Preference.PreferenceItem.SwitchPreference(
                     preference = libraryPreferences.hideMissingChapters,
-                    title = stringResource(MR.strings.pref_hide_missing_chapter_indicators),
+                    // RK: content-typed, because the novel twin below is otherwise the same row twice.
+                    title = contentTypedCategory(
+                        MR.strings.pref_hide_missing_chapter_indicators,
+                        MR.strings.content_type_manga,
+                    ),
                 ),
+                // RK -->
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.hideMissingChapters(),
+                    title = contentTypedCategory(
+                        MR.strings.pref_hide_missing_chapter_indicators,
+                        MR.strings.content_type_novels,
+                    ),
+                ),
+                // RK <--
             ),
         )
     }

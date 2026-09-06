@@ -129,9 +129,6 @@ object SettingsAppearanceScreen : SearchableSettings {
             UiPreferences.dateFormat(dateFormat).format(now)
         }
 
-        // RK: adult-source page-preview rows on the details screen
-        val previewsRowCount by uiPreferences.previewsRowCount.collectAsState()
-
         // RK: the combined Recents tab's seed reads and writes this surface's own keys.
         val sourcePreferences = remember { context.appGraph.reikaiSourcePreferences }
 
@@ -186,14 +183,6 @@ object SettingsAppearanceScreen : SearchableSettings {
                     },
                 ),
                 // RK <--
-                // RK: rows of adult-source page-preview thumbnails on details (0 = off)
-                Preference.PreferenceItem.SliderPreference(
-                    value = previewsRowCount,
-                    valueRange = 0..10,
-                    title = stringResource(MR.strings.pref_previews_row_count),
-                    subtitle = stringResource(MR.strings.pref_previews_row_count_summary),
-                    onValueChanged = { uiPreferences.previewsRowCount.set(it) },
-                ),
             ),
         )
     }

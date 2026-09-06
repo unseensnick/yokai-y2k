@@ -45,6 +45,12 @@ object SettingsBrowseScreen : SearchableSettings {
         val adultSourcesEnabled by exhPreferences.isHentaiEnabled().changes()
             .collectAsState(exhPreferences.isHentaiEnabled().get())
 
+        // RK: page previews are a source capability (four sources implement PagePreviewSource), so the
+        // row lives with sources rather than with the app-wide look it used to sit under.
+        val uiPreferences = remember { context.appGraph.uiPreferences }
+        val previewsRowCount by uiPreferences.previewsRowCount.changes()
+            .collectAsState(uiPreferences.previewsRowCount.get())
+
         val reposCount by getExtensionStoreCountAsFlow().collectAsState(0)
         val novelRepoUrls by novelPreferences.addedRepoUrls().changes()
             .collectAsState(novelPreferences.addedRepoUrls().get())
@@ -57,6 +63,15 @@ object SettingsBrowseScreen : SearchableSettings {
                         preference = sourcePreferences.hideInLibraryItems,
                         title = stringResource(MR.strings.pref_hide_in_library_items),
                     ),
+                    // RK -->
+                    Preference.PreferenceItem.SliderPreference(
+                        value = previewsRowCount,
+                        valueRange = 0..10,
+                        title = stringResource(MR.strings.pref_previews_row_count),
+                        subtitle = stringResource(MR.strings.pref_previews_row_count_summary),
+                        onValueChanged = { uiPreferences.previewsRowCount.set(it) },
+                    ),
+                    // RK <--
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(MR.strings.extensionStores),
                         // RK: show manga + light-novel repo counts (the Repos screen holds both).

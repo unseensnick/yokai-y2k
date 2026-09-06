@@ -177,7 +177,8 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 **App**
 
 - **Settings search now finds what is on the About screen, like the licenses and the update check.** About is also sorted into Legal and Links sections instead of one flat list.
-- **Every source's settings now live in one place, under Settings -> Browse and sources.** The two that had their own entry at the top of Settings moved into a Source settings group there, and "Enable adult sources" joined them from Advanced.
+- **The two "Hide missing chapter indicators" settings now sit together under Settings -> Library -> Behavior, each saying which content type it affects.** The novel one used to sit in the novel update group, with nothing telling the two rows apart.
+- **Every source's settings now live in one place, under Settings -> Browse and sources.** The two that had their own entry at the top of Settings moved into a Source settings group there, joined by "Enable adult sources" from Advanced and "Page preview rows" from Appearance.
 - **Recommendations is now its own entry in Settings instead of sitting inside Library.** One tap instead of three.
 - **Clearing all merges and repairing novel details moved into Advanced's Library section.** They sat in the unheaded block at the top of that screen before, with the rest of the maintenance actions below them.
 - **Nightly builds now have a teal icon, so they are easy to tell apart from the stable app.** They were both purple before.

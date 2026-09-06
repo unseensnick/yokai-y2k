@@ -51,6 +51,16 @@ The update-check spinner survives because `TextPreference` already takes a `widg
 
 Recommendations moves out of Library to its own top-level entry in the same pass (owner, 2026-09-03), which fixes both its depth and its truncated breadcrumb. It is already registered as a top-level search route, so search already treats it as a peer of Library.
 
+### Pass 4: two displaced rows
+
+**Added 2026-09-06, after the owner spotted one of them.** The three passes fixed screen structure and never audited individual rows against their screen's subject, which is a different defect and is why they missed these. An audit of every root screen found only two that are Reikai's own to move; everything else it flagged sits where Mihon puts it, including the Advanced screen's "Library" and "Reader" groups, which read as our drift and are upstream's design (`refs/mihon/.../SettingsAdvancedScreen.kt:132-375`). **Upstream placement is not ours to change**, so the audit's other candidates (high quality renderer, disallow non-ASCII filenames, update manga titles, invalidate download cache, images in descriptions) were left alone.
+
+**Page preview rows** left Appearance's Display group for Browse and sources' Sources group. It controls page-preview thumbnails on the details page, gated on the source implementing `PagePreviewSource` (`MangaViewModel.kt:478`), which four sources do, so it is a source-capability setting rather than app-wide look. Komikku, which the feature was ported from, keeps it on Appearance but inside its own fork-only group rather than among Mihon's display rows, so nothing about the port required Display; pass 3's ruling that source settings live on Browse decided the destination.
+
+**The two "Hide missing chapter indicators" rows** now sit together in Library's Behavior group, each content-typed. The manga row has not moved: it is where upstream puts it (`refs/mihon/.../SettingsLibraryScreen.kt:259`, under `pref_behavior`). The novel twin came out of "Library update, Novels", where it had nothing to do with updating, and both gained a `· Manga` / `· Novels` suffix because the pair otherwise renders as one row printed twice, in the screen and in settings search alike. **The reader screens were considered and rejected**: the setting drives only the details chapter list (`MangaEntryAdapter.kt:136`, `NovelDetailsViewModel.kt:506`) and `MissingCount` reaches nothing in the reader, so naming it a reader setting would trade one wrong home for another.
+
+Both are pure relocations. The preference keys do not move, so there is no migration, no `PreferenceRestorer` skip and no behaviour change.
+
 ## Key files
 
 - `eu/kanade/presentation/more/settings/screen/SettingsReaderScreen.kt`, splitting into itself plus two new screens.
@@ -73,6 +83,8 @@ Ruled 2026-09-03. **Pass 1 shipped**: two top-level reader entries, each self-co
 
 **Pass 3 also surfaced a pre-existing bug and fixed it.** Reaching a delegated source's own preference screen rendered blank, for all seven delegated sources. Mihon resolves the source and tests `is ConfigurableSource` directly, which a wrapped source fails, and Reikai's EXH port never carried Komikku's unwrapping patch for that file. Recorded in [feature-ports.md](../feature-ports.md); unrelated to this rewrite beyond being what made it visible.
 
+**Pass 4 shipped.** Verified on the emulator: Appearance's Display group ends at the combined Recents row with no page-preview slider left on it, Browse and sources shows the slider in its Sources group with the stored value carried over untouched, Library's Behavior group holds both indicator rows labelled `· Manga` and `· Novels`, and settings search returns "Page preview rows" as "Browse and sources > Sources" and the two indicator rows as distinguishable entries where they previously read identically.
+
 The reader takeover ([content-layer-reader-surface.md](content-layer-reader-surface.md)) starts at its step 2 now that this is done.
 
 ## Decisions & tradeoffs
@@ -81,7 +93,7 @@ The reader takeover ([content-layer-reader-surface.md](content-layer-reader-surf
 - **Recommendations leaves Library entirely** rather than gaining a second route, since two ways in is one of the inconsistencies this work removes.
 - **MangaDex and E-Hentai are source settings, not root categories.** They sit at the root only because their preferences are app-owned rather than extension-owned, which is an implementation detail the user should not have to know.
 - **E-Hentai's favorites backup stays with the source.** It reads as a Data and storage feature, but it writes to the source's own account rather than to a file, and Data and storage is about the app's own database.
-- **Not in scope:** the Tracking, Downloads, Security and Appearance screens. They are consistent enough, and folding them in turns a bounded rewrite into an unbounded one.
+- **Not in scope:** the Tracking, Downloads, Security and Appearance screens. They are consistent enough, and folding them in turns a bounded rewrite into an unbounded one. **Narrowed by pass 4:** that judgement was about those screens' own shape, and it did not cover a row from elsewhere parked on one, which is what Appearance turned out to be holding. Their structure is still not in scope.
 
 ## Known gap
 
