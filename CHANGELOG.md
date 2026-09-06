@@ -302,6 +302,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 **Light novels**
 
+- **On a merged novel, downloading from the All chip now downloads the chapters All is showing.** It fetched one source's chapters while you were looking at another's, so nothing on screen ever appeared as downloaded.
 - **A link inside a novel chapter now opens in your browser instead of taking over the reader.** A chapter could previously send the reader's own view to any page it liked.
 - **Opening a downloaded novel chapter no longer freezes the reader while it loads.** Chapters with pictures in them were the worst affected.
 - **Opening a novel with a lot of chapters is faster.** The reader was reading every chapter back out of the database one at a time before it could show you anything.
