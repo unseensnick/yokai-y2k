@@ -36,7 +36,7 @@ import reikai.domain.reader.removeDuplicateChapters
 import reikai.novel.download.NovelDownload
 import reikai.novel.download.NovelDownloadManager
 import reikai.novel.install.LnPluginInstaller
-import reikai.novel.source.NovelSource
+import reikai.novel.source.NovelChapterTextLoader
 import reikai.novel.source.NovelSourceManager
 import reikai.presentation.reader.ReaderThemePreset
 import reikai.presentation.reader.readerDarkPreset
@@ -162,14 +162,13 @@ class NovelReaderScreenModel(
     @Volatile
     private var resolvedNext: Long? = null
 
-    /** Sources resolved lazily per novelId. A merged reading session walks chapters from several
-     *  novels, each with its own source, so cache per novelId rather than once. */
-    private val sourcesByNovel: MutableMap<Long, NovelSource> =
-        java.util.Collections.synchronizedMap(HashMap())
-
-    /** [LnPluginInstaller.ensureLoaded] needs to run once before the first source resolve. */
-    @Volatile
-    private var pluginsLoaded = false
+    /** Session-scoped, so the source cache inside it lives exactly as long as this reading session. */
+    private val textLoader = NovelChapterTextLoader(
+        novelRepo = novelRepo,
+        sourceManager = sourceManager,
+        installer = installer,
+        readDownloaded = { novel, chapter -> downloadManager.getChapterText(novel, chapter) },
+    )
 
     /** Session-scoped LRU of raw chapter HTML + base URL keyed by chapter id (RAM-only, dies with the
      *  screen); a prefetched next chapter opens instantly. Synchronized: the prefetch coroutine and
@@ -472,7 +471,7 @@ class NovelReaderScreenModel(
         val novelIds = chapters.map { it.novelId }.distinct()
         if (novelIds.size <= 1) return emptyMap()
         return novelIds.associateWith { id ->
-            sourcesByNovel[id]?.name
+            textLoader.cachedSource(id)?.name
                 ?: novelRepo.getById(id)?.source?.let { sourceManager.get(it)?.name ?: it }
                 ?: ""
         }
@@ -780,7 +779,7 @@ class NovelReaderScreenModel(
                 hasPrev = resolvedPrev != null,
                 hasNext = resolvedNext != null,
                 // Only from an already-resolved source (so offline downloaded reading stays instant).
-                webUrl = sourcesByNovel[chapter.novelId]?.webUrl(chapter.url),
+                webUrl = textLoader.cachedSource(chapter.novelId)?.webUrl(chapter.url),
                 bookmarked = chapter.bookmark,
             )
         } catch (e: Throwable) {
@@ -788,28 +787,8 @@ class NovelReaderScreenModel(
         }
     }
 
-    /** Downloaded chapter -> read the self-contained HTML from disk (no source, null base URL, images
-     *  already inlined). Otherwise resolve the chapter's source and parse live, using the source site
-     *  as the base URL so relative image URLs resolve. */
-    private suspend fun loadChapterHtml(chapter: NovelChapter): Pair<String, String?> {
-        val novel = novelRepo.getById(chapter.novelId)
-        if (novel != null) downloadManager.getChapterText(novel, chapter)?.let { return it to null }
-        val src = resolveSourceFor(chapter.novelId)
-        return src.parseChapter(chapter.url) to src.site.ifBlank { null }
-    }
-
-    /** Resolve (and cache) the source owning [forNovelId]. Each chapter in a merged session resolves
-     *  by its own `novelId`, so prev/next can cross source boundaries. */
-    private suspend fun resolveSourceFor(forNovelId: Long): NovelSource {
-        sourcesByNovel[forNovelId]?.let { return it }
-        if (!pluginsLoaded) {
-            runCatching { installer.ensureLoaded() }.onSuccess { pluginsLoaded = true }
-        }
-        val sourceId = novelRepo.getById(forNovelId)?.source ?: error("Novel not found")
-        val resolved = sourceManager.get(sourceId) ?: error("Source not installed: $sourceId")
-        sourcesByNovel[forNovelId] = resolved
-        return resolved
-    }
+    private suspend fun loadChapterHtml(chapter: NovelChapter): Pair<String, String?> =
+        textLoader.load(chapter)
 
     /** Warm the resolved next chapter into the cache off-thread (skipped if already cached). One
      *  speculative request per chapter open, so it stays gentle on the source. */

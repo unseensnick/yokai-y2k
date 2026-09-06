@@ -53,7 +53,7 @@ import reikai.novel.download.NovelDownloadCache
 import reikai.novel.download.NovelDownloadManager
 import reikai.novel.download.toDownloadState
 import reikai.novel.install.LnPluginInstaller
-import reikai.novel.source.NovelSource
+import reikai.novel.source.NovelChapterTextLoader
 import reikai.novel.source.NovelSourceManager
 import reikai.presentation.novel.reader.NovelReaderSettings
 import tachiyomi.core.common.util.lang.launchIO
@@ -104,14 +104,13 @@ class NovelReaderViewModel(
     // resolved on first read rather than at construction, which keeps that off the opening thread.
     private val downloadManager: NovelDownloadManager get() = downloadManagerProvider()
 
-    /** Sources resolved lazily per novelId. A merged reading session walks chapters from several
-     *  novels, each with its own source, so cache per novelId rather than once. */
-    private val sourcesByNovel: MutableMap<Long, NovelSource> =
-        java.util.Collections.synchronizedMap(HashMap())
-
-    /** [LnPluginInstaller.ensureLoaded] needs to run once before the first source resolve. */
-    @Volatile
-    private var pluginsLoaded = false
+    /** Session-scoped, so the source cache inside it lives exactly as long as this reading session. */
+    private val textLoader = NovelChapterTextLoader(
+        novelRepo = novelRepo,
+        sourceManager = sourceManager,
+        installer = installer,
+        readDownloaded = { novel, chapter -> downloadManager.getChapterText(novel, chapter) },
+    )
 
     /** Captured whenever a chapter opens (mirrors ReaderViewModel). Global-only: novel sources are
      *  String-keyed with no installed extension, so per-source incognito (await(sourceId)) can't apply. */
@@ -489,7 +488,7 @@ class NovelReaderViewModel(
         val novelIds = chapters.map { it.novelId }.distinct()
         if (novelIds.size <= 1) return emptyMap()
         return novelIds.associateWith { id ->
-            sourcesByNovel[id]?.name
+            textLoader.cachedSource(id)?.name
                 ?: novelRepo.getById(id)?.source?.let { sourceManager.get(it)?.name ?: it }
                 ?: ""
         }
@@ -703,28 +702,7 @@ class NovelReaderViewModel(
         }
     }
 
-    /** Downloaded chapter -> read the self-contained HTML from disk (no source, null base URL, images
-     *  already inlined). Otherwise resolve the chapter's source and parse live, using the source site
-     *  as the base URL so relative image URLs resolve. */
-    suspend fun loadChapterHtml(chapter: NovelChapter): Pair<String, String?> {
-        val novel = novelRepo.getById(chapter.novelId)
-        if (novel != null) downloadManager.getChapterText(novel, chapter)?.let { return it to null }
-        val src = resolveSourceFor(chapter.novelId)
-        return src.parseChapter(chapter.url) to src.site.ifBlank { null }
-    }
-
-    /** Resolve (and cache) the source owning [forNovelId]. Each chapter in a merged session resolves
-     *  by its own `novelId`, so prev/next can cross source boundaries. */
-    private suspend fun resolveSourceFor(forNovelId: Long): NovelSource {
-        sourcesByNovel[forNovelId]?.let { return it }
-        if (!pluginsLoaded) {
-            runCatching { installer.ensureLoaded() }.onSuccess { pluginsLoaded = true }
-        }
-        val sourceId = novelRepo.getById(forNovelId)?.source ?: error("Novel not found")
-        val resolved = sourceManager.get(sourceId) ?: error("Source not installed: $sourceId")
-        sourcesByNovel[forNovelId] = resolved
-        return resolved
-    }
+    suspend fun loadChapterHtml(chapter: NovelChapter): Pair<String, String?> = textLoader.load(chapter)
 
     private data class DisplayPrefs(
         val fontSize: Int,
