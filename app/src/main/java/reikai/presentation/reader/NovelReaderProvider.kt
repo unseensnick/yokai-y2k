@@ -109,6 +109,7 @@ class NovelReaderProvider(
         if (novelPreferences.readerRenderingMode().get() == NovelRenderingMode.NATIVE) {
             return NovelTextViewport(
                 context = host,
+                textSelectable = novelPreferences.readerTextSelectable().get(),
                 onProgressChanged = viewModel::reportProgress,
                 onProgressSettled = viewModel::saveProgress,
                 onToggleMenu = host::toggleMenu,

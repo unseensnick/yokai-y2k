@@ -285,6 +285,11 @@ class NovelPreferences(
      *  (ads, loaders, analytics) rather than chapter content. */
     fun readerKeepEmbeddedJs() = preferenceStore.getBoolean("ln_reader_keep_embedded_js", false)
 
+    /** Let a long-press select the chapter text, at the cost of following links: the two cannot both
+     *  work, because selection needs the movement method that dispatches the drag. Off until
+     *  selection actually engages inside the recycler (see the reader-surface plan doc). */
+    fun readerTextSelectable() = preferenceStore.getBoolean("ln_reader_text_selectable", false)
+
     /** Insert paragraph breaks into chapters that arrive as one unbroken block of text. */
     fun readerAutoSplitText() = preferenceStore.getBoolean("ln_reader_auto_split_text", false)
 

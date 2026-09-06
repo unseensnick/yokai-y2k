@@ -3,6 +3,7 @@ package reikai.presentation.reader
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
+import android.text.method.ArrowKeyMovementMethod
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -18,6 +19,7 @@ import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
 import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.reader.text.ChapterTextBlock
+import reikai.presentation.reader.text.LinkOnlyMovementMethod
 import reikai.presentation.reader.text.NovelTextRenderer
 import reikai.presentation.reader.text.NovelTextStyle
 import kotlin.math.roundToInt
@@ -31,6 +33,8 @@ import kotlin.math.roundToInt
  */
 class NovelTextViewport(
     private val context: Context,
+    /** Selection and clickable links are exclusive: the movement method that drags cannot click. */
+    private val textSelectable: Boolean,
     private val onProgressChanged: (Int) -> Unit,
     private val onProgressSettled: (Int) -> Unit,
     private val onToggleMenu: () -> Unit,
@@ -90,6 +94,7 @@ class NovelTextViewport(
             // and paragraph shape comes from the markup, as the WebView reader's does.
             paragraphSpacing = 0f,
             paragraphIndent = 0f,
+            selectable = textSelectable,
             onTextSet = ::applyPendingProgress,
         )
     }
@@ -162,6 +167,19 @@ class NovelTextViewport(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             )
             NovelTextStyle.apply(this, settings, context)
+            setTextIsSelectable(textSelectable)
+            // The chunk views cover the whole chapter, so a tap on the text never reaches the item
+            // view underneath. LinkOnlyMovementMethod declines a tap that is not on a link, which is
+            // what lets the click through to here.
+            setOnClickListener { onToggleMenu() }
+            // Off on both branches: the click is dispatched by the movement method below, so leaving
+            // it on would let the framework fire its own unchecked intent for the same tap.
+            linksClickable = false
+            movementMethod = if (textSelectable) {
+                ArrowKeyMovementMethod.getInstance()
+            } else {
+                LinkOnlyMovementMethod
+            }
         }
 
     /** One item, the open chapter. The seamless window turns this into the engine's three slots. */

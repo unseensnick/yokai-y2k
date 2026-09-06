@@ -37,6 +37,7 @@ class NovelTextRenderer(
         fontSize: Int,
         paragraphSpacing: Float,
         paragraphIndent: Float,
+        selectable: Boolean,
         onTextSet: () -> Unit,
     ) {
         val body = wrapParagraphs(html)
@@ -47,7 +48,7 @@ class NovelTextRenderer(
             val spannable = withContext(Dispatchers.Default) {
                 // No image getter yet, so an img renders as its alt text rather than a picture.
                 val spanned = Html.fromHtml(normalizeHtmlForRendering(body), Html.FROM_HTML_MODE_LEGACY, null, null)
-                SpannableStringBuilder(spanned)
+                SpannableStringBuilder(spanned).also { NovelChapterLinks.apply(it, context) }
             }
 
             val spacingPx = (paragraphSpacing * fontSize * density).toInt()
@@ -71,10 +72,10 @@ class NovelTextRenderer(
             }
 
             // Precomputing the layout off the main thread is what keeps a long chapter from stalling
-            // on first draw. It is incompatible with selection, which is why it is not conditional.
-            val params = TextViewCompat.getTextMetricsParams(block.chunkViews.first())
+            // on first draw, and it is incompatible with a selectable view, so only one is possible.
+            val params = if (selectable) null else TextViewCompat.getTextMetricsParams(block.chunkViews.first())
             val precomputed = withContext(Dispatchers.Default) {
-                chunks.map { PrecomputedTextCompat.create(it, params) }
+                params?.let { p -> chunks.map { PrecomputedTextCompat.create(it, p) } }
             }
             if (token != block.renderToken || !block.container.isAttachedToWindow) return@launch
 
@@ -86,13 +87,17 @@ class NovelTextRenderer(
             }
 
             block.clearSelections()
-            precomputed.forEachIndexed { i, text ->
-                // Throws when the view's metrics have moved since the params were taken, which a
-                // settings change between the two dispatches can do. The plain text is the fallback.
-                try {
-                    TextViewCompat.setPrecomputedText(block.chunkViews[i], text)
-                } catch (_: IllegalArgumentException) {
-                    block.chunkViews[i].text = chunks[i]
+            if (precomputed == null) {
+                chunks.forEachIndexed { i, chunk -> block.chunkViews[i].text = chunk }
+            } else {
+                precomputed.forEachIndexed { i, text ->
+                    // Throws when the view's metrics moved since the params were taken, which a
+                    // settings change between the two dispatches can do. Plain text is the fallback.
+                    try {
+                        TextViewCompat.setPrecomputedText(block.chunkViews[i], text)
+                    } catch (_: IllegalArgumentException) {
+                        block.chunkViews[i].text = chunks[i]
+                    }
                 }
             }
             block.chunkStarts = starts
