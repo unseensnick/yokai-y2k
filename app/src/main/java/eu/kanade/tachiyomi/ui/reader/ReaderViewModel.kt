@@ -26,7 +26,6 @@ import eu.kanade.domain.manga.model.readingMode
 import eu.kanade.domain.source.interactor.GetIncognitoState
 import eu.kanade.domain.track.interactor.TrackChapter
 import eu.kanade.domain.track.service.TrackPreferences
-import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.cache.CoverCache
@@ -140,7 +139,6 @@ class ReaderViewModel(
     private val chapterCache: ChapterCache,
     private val downloadCache: DownloadCache,
     // RK -->
-    private val uiPreferences: UiPreferences,
     private val mergedChapterProvider: MergedChapterProvider,
     private val mangaPreferences: MangaPreferences,
     private val setReadStatus: SetReadStatus,
@@ -1070,8 +1068,6 @@ class ReaderViewModel(
     /** Snapshot of the reader's chapter list for the in-reader chapter dialog (Y10). */
     fun getChapters(): List<ReaderChapterItem> {
         manga ?: return emptyList()
-        val currentChapter = getCurrentChapter()
-        val dateFormat = UiPreferences.dateFormat(uiPreferences.dateFormat.get())
         // RK: in a merged group each row carries its OWN source's manga (so the download indicator is
         // correct) and a source-name label; an unmerged manga gets no label, as before.
         val merged = mergedGroup?.isMerged == true
@@ -1082,8 +1078,6 @@ class ReaderViewModel(
             ReaderChapterItem(
                 chapter = dbChapter.toDomainChapter()!!,
                 manga = mangaForChapterId(dbChapter.manga_id),
-                isCurrent = dbChapter.id == currentChapter?.chapter?.id,
-                dateFormat = dateFormat,
                 sourceName = if (merged) mergedGroup?.sourceNameByMangaId?.get(dbChapter.manga_id) else null,
             )
         }

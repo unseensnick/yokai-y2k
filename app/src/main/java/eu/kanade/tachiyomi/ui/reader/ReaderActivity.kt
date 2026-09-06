@@ -261,6 +261,19 @@ class ReaderActivity : BaseActivity() {
     var isScrollingThroughPages = false
         private set
 
+    /** RK: set when the launch named no entry, so teardown does not build a session that never opened. */
+    private var launchRejected = false
+
+    /**
+     * RK: which viewer implementation is running, for the settings sheet. A manga question, so it
+     * unwraps the adapter rather than widening the contract, and it is shared from here rather than
+     * from inside the composable, where an abandoned composition would leak the collector.
+     */
+    private val mangaViewerState by lazy {
+        engine.viewport.map { (it as? MangaViewport)?.viewer }
+            .stateIn(lifecycleScope, SharingStarted.Eagerly, null)
+    }
+
     /**
      * Called when the activity is created. Initializes the presenter and configuration.
      */
@@ -289,12 +302,12 @@ class ReaderActivity : BaseActivity() {
         binding = ReaderActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // RK --> decided from the intent and BEFORE the overlay, which was the other way round: the
-        // overlay reads the manga model, so an unusable launch used to build the whole manga stack
-        // and then finish. Asking the intent also lets a launch name a novel, which asking the manga
-        // model never could.
+        // RK --> asked of the intent rather than of the manga model, which is what lets a launch name a
+        // novel, and asked before the overlay is installed, since the overlay renders against a model an
+        // unusable launch never fills.
         val launchedEntry = intent.entryId()
         if (launchedEntry == null || intent.getLongExtra("chapter", -1L) == -1L) {
+            launchRejected = true
             finish()
             return
         }
@@ -401,11 +414,7 @@ class ReaderActivity : BaseActivity() {
         val settingsViewModel = remember {
             ReaderSettingsViewModel(
                 readerState = viewModel.state,
-                // RK: the sheet asks which viewer implementation is running, which is a manga
-                // question, so it unwraps the adapter rather than the contract answering it.
-                viewerState = engine.viewport
-                    .map { (it as? MangaViewport)?.viewer }
-                    .stateIn(lifecycleScope, SharingStarted.Eagerly, null),
+                viewerState = mangaViewerState,
                 onChangeReadingMode = viewModel::setMangaReadingMode,
                 onChangeOrientation = viewModel::setMangaOrientationType,
                 preferences = readerPreferences,
@@ -525,7 +534,9 @@ class ReaderActivity : BaseActivity() {
      */
     override fun onDestroy() {
         super.onDestroy()
-        engine.destroyViewport()
+        // RK: a rejected launch never built the engine, and reading it here would build one (and a model
+        // under it) against a store that is already cleared, for a session that never opened.
+        if (!launchRejected) engine.destroyViewport()
         config = null
         menuToggleToast?.cancel()
         readingModeToast?.cancel()

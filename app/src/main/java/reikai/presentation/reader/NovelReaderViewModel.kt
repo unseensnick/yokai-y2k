@@ -17,6 +17,7 @@ import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
 import reikai.domain.library.ReikaiLibraryPreferences
@@ -47,6 +49,7 @@ import reikai.domain.novel.track.TrackNovelChapter
 import reikai.domain.reader.neighbourChapter
 import reikai.domain.reader.removeDuplicateChapters
 import reikai.novel.download.NovelDownload
+import reikai.novel.download.NovelDownloadCache
 import reikai.novel.download.NovelDownloadManager
 import reikai.novel.download.toDownloadState
 import reikai.novel.install.LnPluginInstaller
@@ -86,6 +89,7 @@ class NovelReaderViewModel(
     private val trackPreferences: TrackPreferences,
     private val getIncognitoState: GetIncognitoState,
     private val setNovelViewerFlags: SetNovelViewerFlags,
+    private val novelDownloadCache: NovelDownloadCache,
     private val context: Context,
 ) : ViewModel() {
 
@@ -440,14 +444,15 @@ class NovelReaderViewModel(
         emitAll(
             combine(downloadManager.queueState, loadedChapter) { queue, _ ->
                 val downloaded = downloadedChapterIds(chapters)
-                chapters.map { it.toRow(sourceNames, queue, downloaded) }
+                val queued = queue.associateBy { it.chapterId }
+                chapters.map { it.toRow(sourceNames, queued, downloaded) }
             },
         )
-    }
+    }.flowOn(Dispatchers.IO)
 
     private fun NovelChapter.toRow(
         sourceNames: Map<Long, String>,
-        queue: List<NovelDownload>,
+        queued: Map<Long, NovelDownload>,
         downloaded: Set<Long>,
     ) = ReaderChapterRow(
         id = id,
@@ -459,7 +464,7 @@ class NovelReaderViewModel(
         read = read,
         bookmark = bookmark,
         downloadState = when {
-            queue.any { it.chapterId == id } -> queue.first { it.chapterId == id }.state.toDownloadState()
+            queued[id] != null -> queued.getValue(id).state.toDownloadState()
             id in downloaded -> Download.State.DOWNLOADED
             else -> Download.State.NOT_DOWNLOADED
         },
@@ -618,12 +623,16 @@ class NovelReaderViewModel(
         }.mapTo(HashSet()) { it.id }
     }
 
+    /** Grouped by novel so the cache resolves each novel's download folder once rather than per chapter,
+     *  which is what a merged group's long list would otherwise pay for on every queue change. */
     private suspend fun downloadedChapterIds(chapters: List<NovelChapter>): Set<Long> {
         val novelsById = chapters.map { it.novelId }.distinct().mapNotNull { novelRepo.getById(it) }
             .associateBy { it.id }
         return chapters
-            .filter { ch -> novelsById[ch.novelId]?.let { downloadManager.isChapterDownloaded(it, ch) } == true }
-            .mapTo(HashSet()) { it.id }
+            .groupBy { it.novelId }
+            .flatMapTo(HashSet()) { (novelId, owned) ->
+                novelsById[novelId]?.let { novelDownloadCache.downloadedChapterIds(it, owned) }.orEmpty()
+            }
     }
 
     /** Re-resolves both neighbours, then warms the next chapter and queues the download-ahead window. */
@@ -643,9 +652,14 @@ class NovelReaderViewModel(
         val nextId = neighbours.value.next ?: return
         if (htmlCache.containsKey(nextId)) return
         viewModelScope.launchIO {
-            runCatching {
+            try {
                 val next = chapterRepo.getById(nextId) ?: return@launchIO
                 htmlCache[nextId] = loadChapterHtml(next)
+            } catch (e: Throwable) {
+                // A speculative fetch failing is not the reader's problem, but swallowing the
+                // cancellation would report a warm-up failure for a session that is gone.
+                if (e is CancellationException) throw e
+                logcat(LogPriority.WARN, e) { "Failed to prefetch novel chapter $nextId" }
             }
         }
     }

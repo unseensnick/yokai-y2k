@@ -11,8 +11,12 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.sample
@@ -59,12 +63,24 @@ class MangaReaderProvider(
 
     override val chapterList: ReaderChapterList = object : ReaderChapterList {
 
-        // Rebuilt on every queue change, and while something is downloading on a sampled tick, so a row
-        // spins without the sheet rebuilding on every frame the download reports.
-        override val rows: Flow<List<ReaderChapterRow>> = combine(
-            downloadManager.queueState,
-            downloadManager.progressFlow().sample(PROGRESS_SAMPLE).map<Download, Any?> { it }.onStart { emit(null) },
-        ) { queue, _ -> viewModel.getChapters().map { it.toRow(queue) } }
+        /**
+         * The disk check is the expensive half (a folder-name hash per chapter), so it runs once per
+         * queue change, which is also when a finished download leaves the queue. Only the progress
+         * numbers refresh on the sampled tick, and they are read off the live queue entries.
+         */
+        override val rows: Flow<List<ReaderChapterRow>> = downloadManager.queueState
+            .flatMapLatest { queue ->
+                val chapters = viewModel.getChapters()
+                val queued = queue.associateBy { it.chapter.id }
+                val downloaded = chapters.filterTo(HashSet(), ::isDownloaded).mapTo(HashSet()) { it.chapter.id }
+                val build = { chapters.map { it.toRow(queued, downloaded) } }
+                if (queued.isEmpty()) {
+                    flowOf(build())
+                } else {
+                    downloadManager.progressFlow().sample(PROGRESS_SAMPLE).map { build() }.onStart { emit(build()) }
+                }
+            }
+            .flowOn(Dispatchers.IO)
 
         override val currentChapterId: Flow<Long> =
             viewModel.state.map { it.currentChapter?.chapter?.id ?: -1L }
@@ -89,15 +105,17 @@ class MangaReaderProvider(
             viewModel.getChapters().find { it.chapter.id == chapterId }?.chapter
     }
 
-    private fun ReaderChapterItem.toRow(queue: List<Download>): ReaderChapterRow {
-        val active = queue.find { it.chapter.id == chapter.id }
-        val downloaded = manga.isLocal() || downloadManager.isChapterDownloaded(
-            chapter.name,
-            chapter.scanlator,
-            chapter.url,
-            manga.title,
-            manga.source,
+    private fun isDownloaded(item: ReaderChapterItem) = item.manga.isLocal() ||
+        downloadManager.isChapterDownloaded(
+            item.chapter.name,
+            item.chapter.scanlator,
+            item.chapter.url,
+            item.manga.title,
+            item.manga.source,
         )
+
+    private fun ReaderChapterItem.toRow(queued: Map<Long, Download>, downloaded: Set<Long>): ReaderChapterRow {
+        val active = queued[chapter.id]
         return ReaderChapterRow(
             id = chapter.id,
             title = chapter.name,
@@ -111,7 +129,7 @@ class MangaReaderProvider(
             bookmark = chapter.bookmark,
             downloadState = when {
                 active != null -> active.status
-                downloaded -> Download.State.DOWNLOADED
+                chapter.id in downloaded -> Download.State.DOWNLOADED
                 else -> Download.State.NOT_DOWNLOADED
             },
             downloadProgress = active?.progress ?: 0,

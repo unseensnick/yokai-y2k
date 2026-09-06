@@ -1,10 +1,14 @@
 package reikai.presentation.reader
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -35,31 +39,42 @@ fun ReaderChapterListDialog(
     onBookmark: (Long, Boolean) -> Unit,
     onDownloadAction: (Long, ChapterDownloadAction) -> Unit,
 ) {
-    val listState = rememberLazyListState(rows.indexOfFirst { it.id == currentChapterId }.coerceAtLeast(0))
-    // Optimistic per-row overrides so a swipe lands immediately: every one of these writes is async, and
-    // a deletion in particular is only visible once the cache catches up.
-    val stateOverrides = remember { mutableStateMapOf<Long, Download.State>() }
-    val readOverrides = remember { mutableStateMapOf<Long, Boolean>() }
-    val bookmarkOverrides = remember { mutableStateMapOf<Long, Boolean>() }
-    fun runDownloadAction(chapterId: Long, action: ChapterDownloadAction) {
-        when (action) {
-            ChapterDownloadAction.DELETE -> stateOverrides[chapterId] = Download.State.NOT_DOWNLOADED
-            else -> stateOverrides.remove(chapterId)
-        }
-        onDownloadAction(chapterId, action)
-    }
-
-    // A source label makes a row two lines, so the title and the download icon are top-aligned when any
-    // row carries one, matching the details list.
-    val labelled = rows.any { it.subtitle != null }
     AdaptiveSheet(onDismissRequest = onDismissRequest) {
+        // The rows arrive asynchronously, and the list state below captures where to open scrolled to on
+        // the composition that first builds it. Waiting here is what keeps that from being row zero.
+        if (rows.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            return@AdaptiveSheet
+        }
+        val listState = rememberLazyListState(rows.indexOfFirst { it.id == currentChapterId }.coerceAtLeast(0))
+        // Optimistic per-row overrides so a swipe lands immediately: every one of these writes is async,
+        // and a deletion in particular is only visible once the cache catches up.
+        val stateOverrides = remember { mutableStateMapOf<Long, Download.State>() }
+        val readOverrides = remember { mutableStateMapOf<Long, Boolean>() }
+        val bookmarkOverrides = remember { mutableStateMapOf<Long, Boolean>() }
+        fun runDownloadAction(chapterId: Long, action: ChapterDownloadAction) {
+            when (action) {
+                ChapterDownloadAction.DELETE -> stateOverrides[chapterId] = Download.State.NOT_DOWNLOADED
+                else -> stateOverrides.remove(chapterId)
+            }
+            onDownloadAction(chapterId, action)
+        }
+
         LazyColumn(
             state = listState,
             modifier = Modifier.heightIn(min = 200.dp, max = 500.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
         ) {
             items(items = rows, key = { "reader-chapter-${it.id}" }) { row ->
-                val downloadState = stateOverrides[row.id] ?: row.downloadState
+                // A row the queue is actually working on outranks an override, so a download started
+                // elsewhere while the sheet is open is not masked by an earlier delete-swipe.
+                val downloadState = if (row.downloadState.isQueued) {
+                    row.downloadState
+                } else {
+                    stateOverrides[row.id] ?: row.downloadState
+                }
                 val read = readOverrides[row.id] ?: row.read
                 val bookmark = bookmarkOverrides[row.id] ?: row.bookmark
                 MangaChapterListItem(
@@ -93,7 +108,6 @@ fun ReaderChapterListDialog(
                             LibraryPreferences.ChapterSwipeAction.Disabled -> {}
                         }
                     },
-                    verticalAlignment = if (labelled) Alignment.Top else Alignment.CenterVertically,
                 )
             }
         }
@@ -107,3 +121,7 @@ internal fun Download.State.toSwipeDownloadAction(): ChapterDownloadAction = whe
     Download.State.QUEUE, Download.State.DOWNLOADING -> ChapterDownloadAction.CANCEL
     Download.State.DOWNLOADED -> ChapterDownloadAction.DELETE
 }
+
+/** Whether the queue is holding this chapter, which is the state a row must not let an override mask. */
+private val Download.State.isQueued: Boolean
+    get() = this == Download.State.QUEUE || this == Download.State.DOWNLOADING || this == Download.State.ERROR
