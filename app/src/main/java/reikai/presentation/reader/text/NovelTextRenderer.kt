@@ -38,6 +38,8 @@ class NovelTextRenderer(
         paragraphSpacing: Float,
         paragraphIndent: Float,
         selectable: Boolean,
+        /** The chapter's own site, sent as the Referer for an image some hosts would otherwise refuse. */
+        refererUrl: String?,
         onTextSet: () -> Unit,
     ) {
         val body = wrapParagraphs(html)
@@ -45,9 +47,21 @@ class NovelTextRenderer(
         val token = ++block.renderToken
 
         scope.launch {
+            // Measured against the column the text is drawn in, so an image is decoded at the size it
+            // is shown at rather than full resolution.
+            val contentWidth = block.chunkViews.firstOrNull()
+                ?.let { it.width - it.paddingLeft - it.paddingRight }
+                ?.takeIf { it > 0 }
+                ?: context.resources.displayMetrics.widthPixels
+            val imageGetter = NovelImageGetter(context, scope, contentWidth, refererUrl, block::chunkViewFor)
+
             val spannable = withContext(Dispatchers.Default) {
-                // No image getter yet, so an img renders as its alt text rather than a picture.
-                val spanned = Html.fromHtml(normalizeHtmlForRendering(body), Html.FROM_HTML_MODE_LEGACY, null, null)
+                val spanned = Html.fromHtml(
+                    normalizeHtmlForRendering(body),
+                    Html.FROM_HTML_MODE_LEGACY,
+                    imageGetter,
+                    null,
+                )
                 SpannableStringBuilder(spanned).also { NovelChapterLinks.apply(it, context) }
             }
 
@@ -102,6 +116,8 @@ class NovelTextRenderer(
             }
             block.chunkStarts = starts
             block.fullText = spannable.toString()
+            // After the text is set, so every image span has a view to find and re-measure.
+            imageGetter.startLoading()
             onTextSet()
         }
     }

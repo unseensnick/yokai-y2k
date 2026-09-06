@@ -95,6 +95,7 @@ class NovelTextViewport(
             paragraphSpacing = 0f,
             paragraphIndent = 0f,
             selectable = textSelectable,
+            refererUrl = chapter.baseUrl?.let { it.trimEnd('/') + "/" },
             onTextSet = ::applyPendingProgress,
         )
     }

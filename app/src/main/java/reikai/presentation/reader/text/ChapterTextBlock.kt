@@ -1,8 +1,11 @@
 package reikai.presentation.reader.text
 
 import android.content.Context
+import android.graphics.drawable.Drawable
 import android.text.Selection
 import android.text.Spannable
+import android.text.Spanned
+import android.text.style.ImageSpan
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -51,6 +54,14 @@ class ChapterTextBlock(
             val view = chunkViews.removeAt(chunkViews.size - 1)
             container.removeView(view)
         }
+    }
+
+    /** The chunk whose text holds the span backed by [drawable], so a finished image knows which
+     *  view to re-measure. */
+    fun chunkViewFor(drawable: Drawable): TextView? = chunkViews.firstOrNull { view ->
+        (view.text as? Spanned)
+            ?.getSpans(0, view.text.length, ImageSpan::class.java)
+            ?.any { it.drawable === drawable } == true
     }
 
     fun clearSelections() = chunkViews.forEach { view ->
