@@ -82,6 +82,9 @@ class MangaReaderProvider(
         .map { it.viewerChapters?.currChapter?.chapter?.id }
         .distinctUntilChanged()
         .map { viewModel.getChapterUrl() }
+        // The source builds the URL and an extension may override that, so it is not main-thread work.
+        // Upstream resolves it in launchIO for the same reason (ReaderActivity, assistUrl).
+        .flowOn(Dispatchers.IO)
 
     override suspend fun previousChapter() = viewModel.loadPreviousChapter()
 
