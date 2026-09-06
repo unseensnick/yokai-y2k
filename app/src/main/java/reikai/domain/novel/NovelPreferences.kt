@@ -281,7 +281,8 @@ class NovelPreferences(
      *  this: a TextView draws CSS as visible text, so it strips it whatever this says. */
     fun readerKeepEmbeddedCss() = preferenceStore.getBoolean("ln_reader_keep_embedded_css", true)
 
-    /** Keep a chapter's own `script` blocks. Off by default: source markup is untrusted. */
+    /** Keep a chapter's own `script` blocks. Off by default: they are the source page's own code
+     *  (ads, loaders, analytics) rather than chapter content. */
     fun readerKeepEmbeddedJs() = preferenceStore.getBoolean("ln_reader_keep_embedded_js", false)
 
     /** Insert paragraph breaks into chapters that arrive as one unbroken block of text. */

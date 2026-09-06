@@ -206,6 +206,12 @@ object NovelHtmlUtils {
         return chapterNumPatterns.any { it.matches(text) && it.containsMatchIn(chapterName) }
     }
 
+    /**
+     * Drops markup a reader should not render: scripts, styles the user did not ask to keep,
+     * `noscript` blocks and comments. Regex-based, so it is a rendering cleanup and never a security
+     * boundary: an end tag with whitespace, comment splicing and every attribute get past it. Do not
+     * treat the result as safe markup (docs/dev/plans/content-layer-reader-surface.md has the list).
+     */
     fun sanitizeForRender(
         content: String,
         target: RenderTarget,

@@ -633,7 +633,7 @@
     <string name="pref_keep_embedded_css">Use the chapter\'s own styling</string>
     <string name="pref_keep_embedded_css_summary">Let a chapter\'s own CSS override your reader display settings</string>
     <string name="pref_keep_embedded_js">Run scripts a chapter embeds</string>
-    <string name="pref_keep_embedded_js_summary">Off is safer: chapter markup comes from the source, not from Reikai</string>
+    <string name="pref_keep_embedded_js_summary">Usually leftover code from the source page rather than part of the chapter</string>
     <string name="pref_auto_split_text">Split walls of text</string>
     <string name="pref_auto_split_text_summary">Add paragraph breaks to chapters that arrive as one unbroken block</string>
     <string name="pref_auto_split_word_count">Words before a split</string>
