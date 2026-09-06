@@ -452,7 +452,6 @@ class ReaderActivity : BaseActivity() {
 
             val onDismissRequest = engine::dismissDialog
             when (val dialog = engineDialog) {
-                null -> {}
                 is ReaderDialog.Loading -> {
                     AlertDialog(
                         onDismissRequest = {},
