@@ -407,14 +407,12 @@ class NovelReaderScreenModel(
      *  currently-open chapter so opening a hidden one directly still resolves. The hidden key mirrors
      *  the details screen: "<sourceId>|<chapterUrl>", the source resolved per the chapter's own
      *  novelId (cheap DB read, no plugin load) so a merged session keys each sibling correctly. */
-    private suspend fun filterHiddenChapters(ids: List<Long>): List<Long> {
+    private suspend fun filterHiddenChapters(chapters: List<NovelChapter>): List<NovelChapter> {
         val hidden = novelPreferences.hiddenChapters().get()
-        if (hidden.isEmpty()) return ids
-        val anchor = chapterRepo.getByNovelId(novelId).associateBy { it.id }
+        if (hidden.isEmpty()) return chapters
         val sourceIdByNovel = HashMap<Long, String>()
-        return ids.filter { id ->
-            if (id == currentId) return@filter true
-            val chapter = anchor[id] ?: chapterRepo.getById(id) ?: return@filter true
+        return chapters.filter { chapter ->
+            if (chapter.id == currentId) return@filter true
             val sourceId = sourceIdByNovel[chapter.novelId] ?: run {
                 val resolved = novelRepo.getById(chapter.novelId)?.source.orEmpty()
                 sourceIdByNovel[chapter.novelId] = resolved
@@ -711,12 +709,11 @@ class NovelReaderScreenModel(
      * thing here as on the details screen. The open chapter always stays eligible, so opening a filtered
      * chapter directly does not strand the reader on it.
      */
-    private suspend fun resolveForwardEligible(ids: List<Long>): Set<Long> {
+    private suspend fun resolveForwardEligible(chapters: List<NovelChapter>): Set<Long> {
         val skipRead = skipReadPref.get()
         val skipFiltered = skipFilteredPref.get()
-        if (!skipRead && !skipFiltered) return ids.toSet()
-        val novel = novelRepo.getById(novelId) ?: return ids.toSet()
-        val chapters = ids.mapNotNull { chapterRepo.getById(it) }
+        if (!skipRead && !skipFiltered) return chapters.mapTo(HashSet()) { it.id }
+        val novel = novelRepo.getById(novelId) ?: return chapters.mapTo(HashSet()) { it.id }
         val downloaded = if (skipFiltered) downloadedChapterIds(chapters) else emptySet()
         val readFilter = novel.effectiveReadFilter(novelPreferences)
         val bookmarkFilter = novel.effectiveBookmarkedFilter(novelPreferences)
@@ -750,22 +747,24 @@ class NovelReaderScreenModel(
                 // group and aggregate the unified order in-reader, so History/Updates/Library need not
                 // pass a list. A group-scoped chapter opened from History can be deduped out of the
                 // unified list, so keep it (placed by chapter number) or prev/next would break.
+                // The chapters stay chapters through both filters: reducing to ids here meant reading
+                // every one of them back out of the database a row at a time before the first paint.
                 val resolved = if (sourceScoped) {
-                    dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())).map { it.id }
+                    dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder()))
                 } else {
                     val chapters = resolveGroupChapters()
-                    val withCurrent = if (chapters.any { it.id == currentId }) {
+                    if (chapters.any { it.id == currentId }) {
                         chapters
                     } else {
                         val current = chapterRepo.getById(currentId)
                         if (current == null) chapters else (chapters + current).sortedWith(readingOrder())
                     }
-                    withCurrent.map { it.id }
                 }
                 // Skip user-hidden chapters so prev/next matches the details list; the open chapter is
                 // always kept (filterHiddenChapters guards currentId).
-                orderedIds = filterHiddenChapters(resolved)
-                forwardEligibleIds = resolveForwardEligible(orderedIds)
+                val visible = filterHiddenChapters(resolved)
+                orderedIds = visible.map { it.id }
+                forwardEligibleIds = resolveForwardEligible(visible)
             }
             val id = currentId
             val chapter = chapterRepo.getById(id) ?: error("Chapter not found")

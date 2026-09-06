@@ -564,20 +564,22 @@ class NovelReaderViewModel(
      * (placed by chapter number) rather than leaving prev and next with nowhere to step from.
      */
     private suspend fun resolveReadingOrder() {
+        // The chapters stay chapters through both filters. Reducing to ids here meant re-reading every
+        // one of them back out of the database a row at a time, before the first page could be drawn.
         val resolved = if (sourceScoped) {
-            dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())).map { it.id }
+            dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder()))
         } else {
             val chapters = resolveGroupChapters()
-            val withCurrent = if (chapters.any { it.id == currentChapterId }) {
+            if (chapters.any { it.id == currentChapterId }) {
                 chapters
             } else {
                 val current = chapterRepo.getById(currentChapterId)
                 if (current == null) chapters else (chapters + current).sortedWith(readingOrder())
             }
-            withCurrent.map { it.id }
         }
-        orderedIds = filterHiddenChapters(resolved)
-        forwardEligibleIds = resolveForwardEligible(orderedIds)
+        val visible = filterHiddenChapters(resolved)
+        orderedIds = visible.map { it.id }
+        forwardEligibleIds = resolveForwardEligible(visible)
     }
 
     /** The opened novel's own chapter sort, always ascending, so paging follows the order the user chose
@@ -624,14 +626,12 @@ class NovelReaderViewModel(
 
     /** Drops user-hidden chapters so paging matches the details list. The open chapter is always kept,
      *  so opening a hidden one directly still resolves. The key mirrors the details screen. */
-    private suspend fun filterHiddenChapters(ids: List<Long>): List<Long> {
+    private suspend fun filterHiddenChapters(chapters: List<NovelChapter>): List<NovelChapter> {
         val hidden = novelPreferences.hiddenChapters().get()
-        if (hidden.isEmpty()) return ids
-        val anchor = chapterRepo.getByNovelId(novelId).associateBy { it.id }
+        if (hidden.isEmpty()) return chapters
         val sourceIdByNovel = HashMap<Long, String>()
-        return ids.filter { id ->
-            if (id == currentChapterId) return@filter true
-            val chapter = anchor[id] ?: chapterRepo.getById(id) ?: return@filter true
+        return chapters.filter { chapter ->
+            if (chapter.id == currentChapterId) return@filter true
             val sourceId = sourceIdByNovel.getOrPut(chapter.novelId) {
                 novelRepo.getById(chapter.novelId)?.source.orEmpty()
             }
@@ -644,12 +644,11 @@ class NovelReaderViewModel(
      * ones this novel's own chapter-list filters hide, which is what makes the setting mean the same
      * thing here as on the details screen. The open chapter stays eligible either way.
      */
-    private suspend fun resolveForwardEligible(ids: List<Long>): Set<Long> {
+    private suspend fun resolveForwardEligible(chapters: List<NovelChapter>): Set<Long> {
         val skipRead = novelPreferences.readerSkipRead().get()
         val skipFiltered = novelPreferences.readerSkipFiltered().get()
-        if (!skipRead && !skipFiltered) return ids.toSet()
-        val novel = novelRepo.getById(novelId) ?: return ids.toSet()
-        val chapters = ids.mapNotNull { chapterRepo.getById(it) }
+        if (!skipRead && !skipFiltered) return chapters.mapTo(HashSet()) { it.id }
+        val novel = novelRepo.getById(novelId) ?: return chapters.mapTo(HashSet()) { it.id }
         val downloaded = if (skipFiltered) downloadedChapterIds(chapters) else emptySet()
         val readFilter = novel.effectiveReadFilter(novelPreferences)
         val bookmarkFilter = novel.effectiveBookmarkedFilter(novelPreferences)
