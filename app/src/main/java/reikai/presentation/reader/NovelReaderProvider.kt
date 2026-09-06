@@ -87,8 +87,9 @@ class NovelReaderProvider(
 
     /**
      * The volume-key values are read once, here, because the viewport takes them as plain values so it
-     * can be built without the graph. The host rebuilds the viewport when they change, which is the
-     * same swap a reading-mode change already performs.
+     * can be built without the graph. Nothing rebuilds a novel viewport mid-session (the host builds it
+     * in `onCreate`, and the rebuild path hangs off the manga collector), so a change to them lands on
+     * the next open.
      */
     override fun createViewport(host: ReaderActivity): ReaderViewport {
         val settings = viewModel.settings.value
@@ -104,6 +105,7 @@ class NovelReaderProvider(
             // Taken from the host being built against rather than held, so a reader rebuilt after a
             // rotation toggles the live Activity's menu instead of the destroyed one's.
             onToggleMenu = host::toggleMenu,
+            statusBarHeightPx = host::displayCutoutTopDp,
         )
     }
 }

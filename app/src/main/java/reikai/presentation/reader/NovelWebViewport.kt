@@ -16,6 +16,7 @@ import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
 import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.novel.reader.NovelReaderWebInterface
+import reikai.presentation.novel.reader.buildReaderHtml
 import reikai.presentation.novel.reader.generalSettingsJson
 import reikai.presentation.novel.reader.readerSettingsJson
 import kotlin.math.roundToInt
@@ -25,18 +26,21 @@ import kotlin.math.roundToInt
  * `index.css` and `core.js` in a WebView, as the novel reader has always done.
  *
  * The volume-key preferences arrive as values rather than a preferences class, so the viewport is
- * constructible without the graph; the host re-creates it when those preferences change.
+ * constructible without the graph. They are read once at construction, and nothing rebuilds the
+ * viewport when they change, so a mid-session change to them takes effect on the next open.
  */
 @SuppressLint("SetJavaScriptEnabled")
 class NovelWebViewport(
-    context: Context,
+    private val context: Context,
     private val volumeKeysEnabled: Boolean,
     private val volumeKeysInverted: Boolean,
     private val volumeKeyScrollFraction: Float,
     private val onProgressChanged: (Int) -> Unit,
     private val onProgressSettled: (Int) -> Unit,
     private val onToggleMenu: () -> Unit,
-) : ReaderViewport {
+    /** Read per load rather than once: the cutout inset is only known after the window has one. */
+    private val statusBarHeightPx: () -> Int,
+) : ReaderViewport, TextViewport {
 
     /** The general block the live document was last given, so a push that would rebuild its DOM only
      *  happens when something in that block actually changed. */
@@ -108,12 +112,35 @@ class NovelWebViewport(
 
     override fun handleGenericMotionEvent(event: MotionEvent): Boolean = false
 
-    fun load(html: String, baseUrl: String?, settings: NovelReaderSettings) {
+    /**
+     * The document is assembled here rather than by the host, because it is this renderer's own
+     * format: Material colours come off [context], which must be the Activity carrying the user's app
+     * theme (see `resolveReaderThemeColors`), and the cutout inset is a CSS variable only this
+     * document has.
+     */
+    override fun load(
+        chapter: NovelReaderViewModel.LoadedChapter,
+        hasPrevious: Boolean,
+        hasNext: Boolean,
+        settings: NovelReaderSettings,
+    ) {
+        val html = buildReaderHtml(
+            chapterHtml = chapter.html,
+            chapterName = chapter.title,
+            progressPercent = chapter.progressPercent,
+            hasPrev = hasPrevious,
+            hasNext = hasNext,
+            settings = settings,
+            colors = context.resolveReaderThemeColors(),
+            statusBarHeightPx = statusBarHeightPx(),
+            debug = BuildConfig.DEBUG,
+        )
         // The document is built with these, so a later push of the same general block is a no-op.
         lastGeneralSettings = generalSettingsJson(settings).toString()
         // Only trust an http(s) base URL. The plugin controls the site URL, and with allowFileAccess on
         // a file:// base would hand the chapter document a file origin.
-        val safeBaseUrl = baseUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        val safeBaseUrl = chapter.baseUrl
+            ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         webView.loadDataWithBaseURL(safeBaseUrl, html, "text/html", "UTF-8", null)
     }
 
@@ -125,7 +152,7 @@ class NovelWebViewport(
      * general block is reassigned only when it actually differs, because a `core.js` watcher rebuilds
      * the chapter DOM on any change to it.
      */
-    fun applySettings(settings: NovelReaderSettings) {
+    override fun applySettings(settings: NovelReaderSettings) {
         val generalJson = generalSettingsJson(settings).toString()
         val pushGeneral = generalJson != lastGeneralSettings
         if (pushGeneral) lastGeneralSettings = generalJson

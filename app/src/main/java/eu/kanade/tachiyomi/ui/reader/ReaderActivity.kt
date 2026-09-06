@@ -101,22 +101,20 @@ import mihon.app.di.AppGraph
 import mihon.core.metro.metroGraph
 import reikai.domain.entry.EntryId
 import reikai.domain.novel.NovelPreferences
-import reikai.presentation.novel.reader.buildReaderHtml
 import reikai.presentation.novel.reader.resolvedForSystemTheme
 import reikai.presentation.reader.MangaReaderProvider
 import reikai.presentation.reader.MangaViewport
 import reikai.presentation.reader.NovelReaderProvider
 import reikai.presentation.reader.NovelReaderViewModel
-import reikai.presentation.reader.NovelWebViewport
 import reikai.presentation.reader.ReaderChapterListDialog
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
 import reikai.presentation.reader.ReaderOrientationDialog
 import reikai.presentation.reader.ReaderTextSizeDialog
 import reikai.presentation.reader.ReaderThemeDialog
+import reikai.presentation.reader.TextViewport
 import reikai.presentation.reader.putEntryId
 import reikai.presentation.reader.readEntryId
-import reikai.presentation.reader.resolveReaderThemeColors
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
@@ -317,11 +315,16 @@ class ReaderActivity : BaseActivity() {
         // A novel session installs its viewport here rather than from the manga collector, which is
         // what updateViewer() hangs off and which never fires without a Manga in state.
         novelSession?.let { provider ->
-            val viewport = provider.createViewport(this) as NovelWebViewport
+            val viewport = provider.createViewport(this)
             engine.installViewport(viewport)
             updateViewerInset(readerPreferences.fullscreen.get(), readerPreferences.drawUnderCutout.get())
             binding.viewerContainer.addView(viewport.view)
-            loadNovelChapters(provider, viewport)
+            // Asked for rather than cast: which text renderer is running is the provider's choice.
+            // A novel viewport that does not answer would render an empty reader in silence, so say so.
+            when (viewport) {
+                is TextViewport -> loadNovelChapters(provider, viewport)
+                else -> logcat(LogPriority.ERROR) { "Novel viewport renders no text: ${viewport::class}" }
+            }
             // Manga locks the window from setViewer, deferred behind the shared-element transition;
             // a novel launch runs neither, so it follows its own resolved orientation from here.
             provider.viewModel.settings
@@ -570,11 +573,11 @@ class ReaderActivity : BaseActivity() {
     }
 
     /**
-     * Renders each chapter the novel model loads. The document is assembled here rather than in the
-     * model because its Material colours come off this Activity's own theme, which is what carries
-     * the user's chosen app theme.
+     * Hands each chapter the novel model loads to whichever text renderer is installed. How that
+     * becomes pixels is the viewport's business; the host only resolves the theme, which it must,
+     * because "Auto" reads this Activity's own night mode.
      */
-    private fun loadNovelChapters(provider: NovelReaderProvider, viewport: NovelWebViewport) {
+    private fun loadNovelChapters(provider: NovelReaderProvider, viewport: TextViewport) {
         val model = provider.viewModel
         // "Auto" resolves to a preset here; the stored colours are only what a manual choice left
         // behind, so a document built from them would show the wrong shade.
@@ -585,18 +588,9 @@ class ReaderActivity : BaseActivity() {
             .onEach { chapter ->
                 val neighbours = model.chapterNeighbours.value
                 viewport.load(
-                    html = buildReaderHtml(
-                        chapterHtml = chapter.html,
-                        chapterName = chapter.title,
-                        progressPercent = chapter.progressPercent,
-                        hasPrev = neighbours.previous != null,
-                        hasNext = neighbours.next != null,
-                        settings = resolvedSettings.first(),
-                        colors = resolveReaderThemeColors(),
-                        statusBarHeightPx = displayCutoutTopDp(),
-                        debug = BuildConfig.DEBUG,
-                    ),
-                    baseUrl = chapter.baseUrl,
+                    chapter = chapter,
+                    hasPrevious = neighbours.previous != null,
+                    hasNext = neighbours.next != null,
                     settings = resolvedSettings.first(),
                 )
             }
@@ -615,7 +609,7 @@ class ReaderActivity : BaseActivity() {
      * The cutout inset in dp, so the first line clears a punch-hole in immersive mode. The WebView
      * viewport is initial-scale=1, so its CSS pixels are dp.
      */
-    private fun displayCutoutTopDp(): Int {
+    internal fun displayCutoutTopDp(): Int {
         val insets = ViewCompat.getRootWindowInsets(binding.root)
             ?.getInsets(WindowInsetsCompat.Type.displayCutout())
         return ((insets?.top ?: 0) / resources.displayMetrics.density).roundToInt()
