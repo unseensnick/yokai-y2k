@@ -74,7 +74,9 @@ object SettingsNovelReaderScreen : SearchableSettings {
                 ),
                 Preference.PreferenceItem.SliderPreference(
                     value = (spacing * TENTHS).roundToInt(),
-                    valueRange = 0..30,
+                    // Past tsundoku's own 3em ceiling, because their renderer draws a blank line
+                    // under the setting that ours removes, so their top end is not ours.
+                    valueRange = 0..40,
                     title = stringResource(MR.strings.pref_paragraph_spacing),
                     subtitle = stringResource(MR.strings.pref_paragraph_spacing_summary),
                     valueString = "%.1fem".format(spacing),

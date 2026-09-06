@@ -134,11 +134,12 @@ class NovelPreferences(
 
     /**
      * First-line indent and the gap between paragraphs, both as a multiple of the font size so they
-     * scale with it, and both at tsundoku's defaults. Spacing is the whole gap rather than an
-     * addition to one, so zero genuinely closes it up.
+     * scale with it. Spacing is the whole gap rather than an addition to one, so zero genuinely
+     * closes it up, and the default is chosen by eye rather than taken from tsundoku's 0.5: theirs
+     * sits on top of a blank line our renderer removes, which makes the same number draw differently.
      */
     fun readerParagraphIndent() = preferenceStore.getFloat("ln_reader_paragraph_indent", 0f)
-    fun readerParagraphSpacing() = preferenceStore.getFloat("ln_reader_paragraph_spacing", 0.5f)
+    fun readerParagraphSpacing() = preferenceStore.getFloat("ln_reader_paragraph_spacing", 1.5f)
 
     /** Hold the screen awake while reading (Android FLAG_KEEP_SCREEN_ON). Separate from the manga
      *  reader's key on purpose, not twin debt to unify: see docs/dev/plans/settings-restructure.md. */
