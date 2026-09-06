@@ -24,7 +24,9 @@ fun novelReaderTarget(
     return when (mode) {
         NovelRenderingMode.LEGACY ->
             NovelReaderTarget.LegacyScreen(NovelReaderScreen(novelId, chapterId, sourceScoped))
-        NovelRenderingMode.WEBVIEW ->
+        // Both shared-host modes launch identically; which renderer the host installs is the
+        // viewport's question, answered in NovelReaderProvider.createViewport.
+        NovelRenderingMode.WEBVIEW, NovelRenderingMode.NATIVE ->
             NovelReaderTarget.Host(ReaderActivity.newNovelIntent(context, novelId, chapterId, sourceScoped))
     }
 }

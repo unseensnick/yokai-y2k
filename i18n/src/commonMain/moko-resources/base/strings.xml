@@ -640,6 +640,7 @@
     <string name="pref_novel_rendering_mode">Rendering mode</string>
     <string name="pref_novel_rendering_mode_legacy">Original reader</string>
     <string name="pref_novel_rendering_mode_webview">New reader (in development)</string>
+    <string name="pref_novel_rendering_mode_native">Native text (in development)</string>
     <string name="pref_category_accessibility">Accessibility</string>
     <string name="pref_tap_to_scroll">Tap edges to scroll</string>
     <string name="pref_swipe_between_chapters">Swipe between chapters</string>

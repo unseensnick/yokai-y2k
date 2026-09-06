@@ -15,4 +15,7 @@ enum class NovelRenderingMode(val titleRes: StringResource) {
 
     /** The shared reader host, rendering the same HTML pipeline the legacy reader uses. */
     WEBVIEW(MR.strings.pref_novel_rendering_mode_webview),
+
+    /** The shared host with the native text renderer, which is what replaces the WebView engine. */
+    NATIVE(MR.strings.pref_novel_rendering_mode_native),
 }

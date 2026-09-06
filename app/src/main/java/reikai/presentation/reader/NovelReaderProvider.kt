@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import reikai.domain.novel.NovelPreferences
+import reikai.domain.novel.NovelRenderingMode
 import reikai.domain.reader.ChapterProgress
 
 /**
@@ -15,7 +16,7 @@ import reikai.domain.reader.ChapterProgress
  */
 class NovelReaderProvider(
     val viewModel: NovelReaderViewModel,
-    novelPreferences: NovelPreferences,
+    private val novelPreferences: NovelPreferences,
 ) : ReaderProvider {
 
     override val chrome: Flow<ReaderChromeState> =
@@ -105,6 +106,14 @@ class NovelReaderProvider(
      */
     override fun createViewport(host: ReaderActivity): ReaderViewport {
         val settings = viewModel.settings.value
+        if (novelPreferences.readerRenderingMode().get() == NovelRenderingMode.NATIVE) {
+            return NovelTextViewport(
+                context = host,
+                onProgressChanged = viewModel::reportProgress,
+                onProgressSettled = viewModel::saveProgress,
+                onToggleMenu = host::toggleMenu,
+            )
+        }
         return NovelWebViewport(
             context = host,
             volumeKeysEnabled = settings.useVolumeButtons,
