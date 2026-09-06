@@ -26,12 +26,26 @@ object NovelTextStyle {
 
     fun apply(view: TextView, settings: NovelReaderSettings, context: Context) {
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSize.toFloat())
-        // The web layer's lineHeight is a multiplier, which is exactly what setLineSpacing takes.
-        view.setLineSpacing(0f, settings.lineHeight)
+        view.typeface = typefaceFor(context, settings.fontFamily)
+        applyLineSpacing(view, settings.lineHeight)
         view.setPadding((settings.padding * context.resources.displayMetrics.density).toInt())
         view.setTextColor(parseColor(settings.textColor, Color.BLACK))
-        view.typeface = typefaceFor(context, settings.fontFamily)
         applyAlignment(view, settings.textAlign)
+    }
+
+    /**
+     * The setting is a multiplier, but it is applied here as the equivalent number of pixels.
+     *
+     * A multiplier scales every line by its own height, and a line holding an image is as tall as the
+     * image, so a full-width picture gained half its height again in blank space above it. The same
+     * spacing expressed as a fixed amount leaves text looking identical and leaves images alone.
+     * Requires the size and typeface to be set first, since it measures them.
+     */
+    private fun applyLineSpacing(view: TextView, multiplier: Float) {
+        val metrics = view.paint.fontMetricsInt
+        val textLineHeight = (metrics.bottom - metrics.top).toFloat()
+        val extra = ((multiplier - 1f) * textLineHeight).coerceAtLeast(0f)
+        view.setLineSpacing(extra, 1f)
     }
 
     /** Justification is a paragraph property the framework only honours from API 26, our minimum. */
