@@ -70,7 +70,9 @@ class NovelTextRenderer(
                     imageGetter,
                     null,
                 )
-                SpannableStringBuilder(spanned).also { NovelChapterLinks.apply(it, context) }
+                SpannableStringBuilder(spanned)
+                    .also { collapseBlankLines(it) }
+                    .also { NovelChapterLinks.apply(it, context) }
             }
 
             val spacingPx = (paragraphSpacing * fontSize * density).toInt()
@@ -223,6 +225,19 @@ class NovelTextRenderer(
             ?: withWidth.maxByOrNull { it.second!! }
             ?: candidates.first()
         img.attr("src", best.first)
+    }
+
+    /**
+     * `Html.fromHtml` separates blocks with a blank line, which would sit under the paragraph spacing
+     * and make the same setting draw a wider gap here than in a WebView. Collapsing it leaves the
+     * spacing as the whole gap in both. Tsundoku keeps the blank line and carries that difference.
+     */
+    private fun collapseBlankLines(text: SpannableStringBuilder) {
+        var i = text.length - 1
+        while (i > 0) {
+            if (text[i] == '\n' && text[i - 1] == '\n') text.delete(i, i + 1)
+            i--
+        }
     }
 
     private fun applyParagraphSpans(spannable: SpannableStringBuilder, spacingPx: Int, indentPx: Int) {

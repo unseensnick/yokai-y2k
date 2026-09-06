@@ -85,7 +85,6 @@ fun NovelReaderSettingsSheet(
     onFontSize: (Int) -> Unit,
     onLineHeight: (Float) -> Unit,
     onTextAlign: (String) -> Unit,
-    onPadding: (Int) -> Unit,
     onFontFamily: (String) -> Unit,
     onFollowSystem: () -> Unit,
     onPreset: (ReaderThemePreset) -> Unit,
@@ -142,9 +141,6 @@ fun NovelReaderSettingsSheet(
                         14,
                     ) {
                         onLineHeight((it * 10).toInt() / 10f)
-                    }
-                    LabeledSlider("Padding", "${settings.padding}", settings.padding.toFloat(), 0f..48f, 11) {
-                        onPadding(it.toInt())
                     }
                     Text("Alignment", style = MaterialTheme.typography.titleSmall)
                     Row(

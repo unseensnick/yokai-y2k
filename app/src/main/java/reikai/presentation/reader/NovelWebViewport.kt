@@ -21,6 +21,7 @@ import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.novel.reader.NovelReaderWebInterface
 import reikai.presentation.novel.reader.buildReaderHtml
 import reikai.presentation.novel.reader.generalSettingsJson
+import reikai.presentation.novel.reader.readerCssVariablesScript
 import reikai.presentation.novel.reader.readerSettingsJson
 import kotlin.math.roundToInt
 
@@ -182,6 +183,9 @@ class NovelWebViewport(
         val pushGeneral = generalJson != lastGeneralSettings
         if (pushGeneral) lastGeneralSettings = generalJson
         val script = buildString {
+            // Outside the reader guard: these are the document's own variables, so they still apply
+            // while the web layer is mid-load.
+            append(readerCssVariablesScript(settings))
             append("if (window.reader) { reader.readerSettings.val = ")
             append(readerSettingsJson(settings).toString()).append(';')
             if (pushGeneral) append(" reader.generalSettings.val = ").append(generalJson).append(';')

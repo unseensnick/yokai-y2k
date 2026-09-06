@@ -121,15 +121,24 @@ class NovelPreferences(
     fun readerLineSpacing() = preferenceStore.getFloat("ln_reader_line_spacing", 1.5f)
     fun readerTextAlign() = preferenceStore.getString("ln_reader_text_align", "left")
     fun readerFontFamily() = preferenceStore.getString("ln_reader_font_family", "")
-    fun readerPadding() = preferenceStore.getInt("ln_reader_padding", 16)
 
     /**
-     * First-line indent and the gap after a paragraph, both as a multiple of the font size so they
-     * scale with it. Zero leaves the paragraph shape the markup already produces, which is what both
-     * readers showed before these existed.
+     * The four page margins, in dp, at tsundoku's defaults. The top is the odd one out on purpose:
+     * it clears the status bar and the reader's own top bar. They replaced a single padding value,
+     * whose key [DEAD_READER_PADDING_KEY] is now read only by the migration that copies it into these.
+     */
+    fun readerMarginTop() = preferenceStore.getInt("ln_reader_margin_top", 50)
+    fun readerMarginBottom() = preferenceStore.getInt("ln_reader_margin_bottom", 16)
+    fun readerMarginLeft() = preferenceStore.getInt("ln_reader_margin_left", 16)
+    fun readerMarginRight() = preferenceStore.getInt("ln_reader_margin_right", 16)
+
+    /**
+     * First-line indent and the gap between paragraphs, both as a multiple of the font size so they
+     * scale with it, and both at tsundoku's defaults. Spacing is the whole gap rather than an
+     * addition to one, so zero genuinely closes it up.
      */
     fun readerParagraphIndent() = preferenceStore.getFloat("ln_reader_paragraph_indent", 0f)
-    fun readerParagraphSpacing() = preferenceStore.getFloat("ln_reader_paragraph_spacing", 0f)
+    fun readerParagraphSpacing() = preferenceStore.getFloat("ln_reader_paragraph_spacing", 0.5f)
 
     /** Hold the screen awake while reading (Android FLAG_KEEP_SCREEN_ON). Separate from the manga
      *  reader's key on purpose, not twin debt to unify: see docs/dev/plans/settings-restructure.md. */
@@ -414,3 +423,10 @@ class NovelPreferences(
         private val metadataJson = Json { ignoreUnknownKeys = true }
     }
 }
+
+/**
+ * The novel reader's retired single-padding key, superseded by the four margins. Its accessor is gone,
+ * so only [mihon.core.migration.migrations.SplitNovelReaderPaddingMigration] still reads it, to carry a
+ * customised value into the four that replaced it.
+ */
+const val DEAD_READER_PADDING_KEY = "ln_reader_padding"

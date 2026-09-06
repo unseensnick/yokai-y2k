@@ -5,6 +5,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
@@ -15,6 +16,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import kotlin.math.roundToInt
+import tachiyomi.core.common.preference.Preference as PreferenceStoreEntry
 
 /**
  * Light-novel reader settings, a top-level Settings entry beside [SettingsMangaReaderScreen]. Settings
@@ -58,6 +60,10 @@ object SettingsNovelReaderScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_text_display),
             preferenceItems = listOf(
+                marginRow(novelPreferences.readerMarginTop(), MR.strings.pref_margin_top),
+                marginRow(novelPreferences.readerMarginBottom(), MR.strings.pref_margin_bottom),
+                marginRow(novelPreferences.readerMarginLeft(), MR.strings.pref_margin_left),
+                marginRow(novelPreferences.readerMarginRight(), MR.strings.pref_margin_right),
                 Preference.PreferenceItem.SliderPreference(
                     value = (indent * TENTHS).roundToInt(),
                     valueRange = 0..50,
@@ -75,6 +81,23 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     onValueChanged = { spacingPref.set(it / TENTHS) },
                 ),
             ),
+        )
+    }
+
+    /** One page margin, in dp. The ceiling is a third of a phone's short edge, past which a column
+     *  of text stops being readable. */
+    @Composable
+    private fun marginRow(
+        preference: PreferenceStoreEntry<Int>,
+        titleRes: StringResource,
+    ): Preference.PreferenceItem.SliderPreference {
+        val value by preference.collectAsState()
+        return Preference.PreferenceItem.SliderPreference(
+            value = value,
+            valueRange = 0..64,
+            title = stringResource(titleRes),
+            valueString = "${value}dp",
+            onValueChanged = { preference.set(it) },
         )
     }
 

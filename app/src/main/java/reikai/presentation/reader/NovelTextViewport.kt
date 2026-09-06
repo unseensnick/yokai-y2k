@@ -3,6 +3,7 @@ package reikai.presentation.reader
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
+import android.text.SpannableStringBuilder
 import android.text.method.ArrowKeyMovementMethod
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -98,10 +99,12 @@ class NovelTextViewport(
             draw(chapter, settings, startFraction = percent() / 100f)
             return
         }
-        // Restyling a view holding PrecomputedText crashes the framework's own long-press drag path,
-        // so the text is taken back to a plain CharSequence first (tsundoku NovelViewer:1754).
+        block?.let { NovelTextStyle.applyMargins(it.container, settings, context) }
         block?.chunkViews?.forEach { view ->
-            view.text = view.text.toString()
+            // A precomputed layout was measured against the old paint, and the framework's own
+            // long-press drag path re-sets it without checking, which throws. Copying rather than
+            // flattening is what keeps the chapter's emphasis, links, images and paragraph spans.
+            view.text = SpannableStringBuilder(view.text)
             NovelTextStyle.apply(view, settings, context)
         }
     }
@@ -119,6 +122,7 @@ class NovelTextViewport(
         this.settings = settings
         recycler.setBackgroundColor(NovelTextStyle.parseColor(settings.backgroundColor, Color.WHITE))
         val block = ChapterTextBlock(context) { createChunkView(settings) }
+        NovelTextStyle.applyMargins(block.container, settings, context)
         this.block = block
         rendered = false
         adapter.show(block)

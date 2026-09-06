@@ -48,10 +48,11 @@ android {
         // in dev builds otherwise. A deliberate exception to the bump-at-release-cut rule; see
         // CLAUDE.md. 186 gates the novel custom-cover re-key; 187 the category schema unification's
         // novel-category fold-in; 188 the category-preference content-type cleanup; 189 the
-        // merge-prefs-to-groups migration and 190 the chapter-match-key backfill after it. All sit
-        // above 0.3.2's 185, so a 0.3.2 install still runs them. Further migrations take 191+.
+        // merge-prefs-to-groups migration and 190 the chapter-match-key backfill after it; 191 splits
+        // the novel reader's single padding into its four margins. All sit above 0.3.2's 185, so a
+        // 0.3.2 install still runs them. Further migrations take 192+.
         // versionName tracks the last shipped release until this cycle is cut.
-        versionCode = 190
+        versionCode = 191
         versionName = "0.3.2"
         // RK <--
 

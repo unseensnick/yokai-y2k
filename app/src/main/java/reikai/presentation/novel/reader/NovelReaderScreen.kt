@@ -464,7 +464,6 @@ class NovelReaderScreen(
                 onFontSize = screenModel::setFontSize,
                 onLineHeight = screenModel::setLineHeight,
                 onTextAlign = screenModel::setTextAlign,
-                onPadding = screenModel::setPadding,
                 onFontFamily = screenModel::setFontFamily,
                 onFollowSystem = screenModel::setFollowSystemTheme,
                 onPreset = screenModel::setThemePreset,

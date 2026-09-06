@@ -15,7 +15,7 @@ data class NovelReaderSettings(
     val fontSize: Int,
     val lineHeight: Float,
     val textAlign: String,
-    val padding: Int,
+    val margins: ReaderMargins,
     /** First-line indent, as a multiple of [fontSize]. */
     val paragraphIndent: Float,
     /** Gap after a paragraph, as a multiple of [fontSize]. */
@@ -53,6 +53,20 @@ data class NovelReaderSettings(
     // Vertical progress-rail geometry, shared with the manga reader (verticalNavigator prefs).
     val railHeightPercent: Int,
     val railOnLeft: Boolean,
+)
+
+/**
+ * The reader page's four margins, in dp.
+ *
+ * They are one type rather than four fields because the renderers split them differently: a text
+ * renderer puts the sides on every chunk view and the ends on the column that holds them, so a
+ * chapter long enough to be chunked does not repeat the top margin at every seam.
+ */
+data class ReaderMargins(
+    val top: Int,
+    val bottom: Int,
+    val left: Int,
+    val right: Int,
 )
 
 /**

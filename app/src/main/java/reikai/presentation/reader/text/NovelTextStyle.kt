@@ -6,8 +6,8 @@ import android.graphics.Typeface
 import android.text.Layout
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.TextView
-import androidx.core.view.setPadding
 import logcat.LogPriority
 import reikai.presentation.novel.reader.NovelReaderSettings
 import tachiyomi.core.common.util.system.logcat
@@ -28,9 +28,23 @@ object NovelTextStyle {
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSize.toFloat())
         view.typeface = typefaceFor(context, settings.fontFamily)
         applyLineSpacing(view, settings.lineHeight)
-        view.setPadding((settings.padding * context.resources.displayMetrics.density).toInt())
+        val density = context.resources.displayMetrics.density
+        // Sides only. The top and bottom belong to the column, or a chapter long enough to be split
+        // across chunk views would repeat the page margin at every seam.
+        view.setPadding((settings.margins.left * density).toInt(), 0, (settings.margins.right * density).toInt(), 0)
         view.setTextColor(parseColor(settings.textColor, Color.BLACK))
         applyAlignment(view, settings.textAlign)
+    }
+
+    /** The ends of the page, applied once to the column that holds the chunks. */
+    fun applyMargins(container: View, settings: NovelReaderSettings, context: Context) {
+        val density = context.resources.displayMetrics.density
+        container.setPadding(
+            0,
+            (settings.margins.top * density).toInt(),
+            0,
+            (settings.margins.bottom * density).toInt(),
+        )
     }
 
     /**

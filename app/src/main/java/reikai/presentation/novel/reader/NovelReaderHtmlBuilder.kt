@@ -85,7 +85,7 @@ fun buildReaderHtml(
         :root {
           --StatusBar-currentHeight: ${statusBarHeightPx}px;
           --readerSettings-theme: ${settings.backgroundColor};
-          --readerSettings-padding: ${settings.padding}px;
+          --readerSettings-padding: ${settings.margins.left}px;
           --readerSettings-textSize: ${settings.fontSize}px;
           --readerSettings-textColor: ${settings.textColor};
           --readerSettings-textAlign: ${settings.textAlign};
@@ -93,6 +93,10 @@ fun buildReaderHtml(
           --readerSettings-fontFamily: ${settings.fontFamily};
           --readerSettings-paragraphIndent: ${settings.paragraphIndent}em;
           --readerSettings-paragraphSpacing: ${settings.paragraphSpacing}em;
+          --readerSettings-marginTop: ${settings.margins.top}px;
+          --readerSettings-marginBottom: ${settings.margins.bottom}px;
+          --readerSettings-marginLeft: ${settings.margins.left}px;
+          --readerSettings-marginRight: ${settings.margins.right}px;
           --theme-primary: ${colors.primary};
           --theme-onPrimary: ${colors.onPrimary};
           --theme-secondary: ${colors.secondary};
@@ -107,11 +111,18 @@ fun buildReaderHtml(
           --theme-outline: ${colors.outline};
           --theme-rippleColor: ${colors.rippleColor};
         }
-        /* Spacing is added to the browser's own 1em paragraph margin, which is the gap both readers
-           had before this setting existed, so zero leaves the page exactly as it was. */
+        /* Replaces the browser's own paragraph margin rather than adding to it, so the setting is the
+           whole gap and reads the same number tsundoku's WebView mode does. */
         p {
           text-indent: var(--readerSettings-paragraphIndent);
-          margin-bottom: calc(1em + var(--readerSettings-paragraphSpacing));
+          margin-top: var(--readerSettings-paragraphSpacing);
+          margin-bottom: var(--readerSettings-paragraphSpacing);
+        }
+        /* Wins over the stylesheet's own single-value rule by coming after it. Reads variables rather
+           than fixed numbers so a settings change can rewrite them without rebuilding the document. */
+        #LNReader-chapter {
+          padding: var(--readerSettings-marginTop) var(--readerSettings-marginRight)
+                   var(--readerSettings-marginBottom) var(--readerSettings-marginLeft);
         }
         </style>
         </head>
@@ -202,6 +213,27 @@ fun generalSettingsJson(settings: NovelReaderSettings): JSONObject = JSONObject(
 }
 
 /**
+ * Rewrites the settings the vendored web layer knows nothing about, so changing one reflows the open
+ * chapter instead of waiting for the next.
+ *
+ * The four margins, the indent and the paragraph spacing reach the page only through the document's
+ * own rules, which read these variables; `readerSettingsJson` carries the rest.
+ */
+fun readerCssVariablesScript(settings: NovelReaderSettings): String = buildString {
+    fun setProperty(name: String, value: String) =
+        append("d.setProperty('--readerSettings-$name','$value');")
+
+    append("(function(){var d=document.documentElement.style;")
+    setProperty("marginTop", "${settings.margins.top}px")
+    setProperty("marginBottom", "${settings.margins.bottom}px")
+    setProperty("marginLeft", "${settings.margins.left}px")
+    setProperty("marginRight", "${settings.margins.right}px")
+    setProperty("paragraphIndent", "${settings.paragraphIndent}em")
+    setProperty("paragraphSpacing", "${settings.paragraphSpacing}em")
+    append("})();")
+}
+
+/**
  * The LNReader `readerSettings` object the web layer reads. Used both for the initial
  * [buildReaderHtml] config and for live updates pushed via `reader.readerSettings.val = ...`, so the
  * two stay in sync.
@@ -211,7 +243,9 @@ fun readerSettingsJson(settings: NovelReaderSettings): JSONObject = JSONObject()
     put("textColor", settings.textColor)
     put("textSize", settings.fontSize)
     put("textAlign", settings.textAlign)
-    put("padding", settings.padding)
+    // The web layer knows one padding value, and the document's own rule owns the four. This still
+    // drives the next-chapter button's side margins, which read the same variable.
+    put("padding", settings.margins.left)
     put("fontFamily", settings.fontFamily)
     put("lineHeight", settings.lineHeight.toDouble())
     put("customCSS", "")

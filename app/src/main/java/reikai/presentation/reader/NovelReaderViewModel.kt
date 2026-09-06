@@ -57,6 +57,7 @@ import reikai.novel.install.LnPluginInstaller
 import reikai.novel.source.NovelChapterTextLoader
 import reikai.novel.source.NovelSourceManager
 import reikai.presentation.novel.reader.NovelReaderSettings
+import reikai.presentation.novel.reader.ReaderMargins
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -167,16 +168,19 @@ class NovelReaderViewModel(
                 novelPreferences.readerFontSize().changes(),
                 novelPreferences.readerLineSpacing().changes(),
                 novelPreferences.readerTextAlign().changes(),
-                novelPreferences.readerPadding().changes(),
                 novelPreferences.readerFontFamily().changes(),
-            ) { fontSize, lineHeight, textAlign, padding, fontFamily ->
-                DisplayPrefs(fontSize, lineHeight, textAlign, padding, fontFamily)
+            ) { fontSize, lineHeight, textAlign, fontFamily ->
+                TypePrefs(fontSize, lineHeight, textAlign, fontFamily)
             },
+            combine(
+                novelPreferences.readerMarginTop().changes(),
+                novelPreferences.readerMarginBottom().changes(),
+                novelPreferences.readerMarginLeft().changes(),
+                novelPreferences.readerMarginRight().changes(),
+            ) { top, bottom, left, right -> ReaderMargins(top, bottom, left, right) },
             novelPreferences.readerParagraphIndent().changes(),
             novelPreferences.readerParagraphSpacing().changes(),
-        ) { display, indent, spacing ->
-            display.copy(paragraphIndent = indent, paragraphSpacing = spacing)
-        },
+        ) { type, margins, indent, spacing -> DisplayPrefs(type, margins, indent, spacing) },
         combine(
             novelPreferences.readerFollowSystemTheme().changes(),
             novelPreferences.readerBackgroundColor().changes(),
@@ -222,13 +226,13 @@ class NovelReaderViewModel(
         ) { tts, flags, scroll, volume -> ReaderExtraPrefs(tts, flags, scroll, volume) },
     ) { display, theme, keepScreenOn, orient, extra ->
         NovelReaderSettings(
-            fontSize = display.fontSize,
-            lineHeight = display.lineHeight,
-            textAlign = display.textAlign,
-            padding = display.padding,
+            fontSize = display.type.fontSize,
+            lineHeight = display.type.lineHeight,
+            textAlign = display.type.textAlign,
+            margins = display.margins,
             paragraphIndent = display.paragraphIndent,
             paragraphSpacing = display.paragraphSpacing,
-            fontFamily = display.fontFamily,
+            fontFamily = display.type.fontFamily,
             followSystemTheme = theme.followSystem,
             backgroundColor = theme.background,
             textColor = theme.textColor,
@@ -438,6 +442,13 @@ class NovelReaderViewModel(
         chapterReadStartTime = null
     }
 
+    private fun currentMargins() = ReaderMargins(
+        top = novelPreferences.readerMarginTop().get(),
+        bottom = novelPreferences.readerMarginBottom().get(),
+        left = novelPreferences.readerMarginLeft().get(),
+        right = novelPreferences.readerMarginRight().get(),
+    )
+
     private fun currentSettings(): NovelReaderSettings {
         val override = orientationOverride.value
         val default = novelPreferences.readerDefaultOrientation().get()
@@ -445,7 +456,7 @@ class NovelReaderViewModel(
             fontSize = novelPreferences.readerFontSize().get(),
             lineHeight = novelPreferences.readerLineSpacing().get(),
             textAlign = novelPreferences.readerTextAlign().get(),
-            padding = novelPreferences.readerPadding().get(),
+            margins = currentMargins(),
             paragraphIndent = novelPreferences.readerParagraphIndent().get(),
             paragraphSpacing = novelPreferences.readerParagraphSpacing().get(),
             fontFamily = novelPreferences.readerFontFamily().get(),
@@ -751,14 +762,17 @@ class NovelReaderViewModel(
 
     suspend fun loadChapterHtml(chapter: NovelChapter): Pair<String, String?> = textLoader.load(chapter)
 
-    private data class DisplayPrefs(
+    private data class TypePrefs(
         val fontSize: Int,
         val lineHeight: Float,
         val textAlign: String,
-        val padding: Int,
         val fontFamily: String,
-        val paragraphIndent: Float = 0f,
-        val paragraphSpacing: Float = 0f,
+    )
+    private data class DisplayPrefs(
+        val type: TypePrefs,
+        val margins: ReaderMargins,
+        val paragraphIndent: Float,
+        val paragraphSpacing: Float,
     )
     private data class ThemePrefs(val followSystem: Boolean, val background: String, val textColor: String)
     private data class TtsPrefs(

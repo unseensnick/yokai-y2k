@@ -194,6 +194,9 @@ fun NovelReaderWebView(
         val pushGeneral = generalJson != lastGeneral.value
         if (pushGeneral) lastGeneral.value = generalJson
         val script = buildString {
+            // Outside the reader guard: the margins, indent and spacing reach the page through the
+            // document's own variables, which `core.js` knows nothing about.
+            append(readerCssVariablesScript(settings))
             append("if (window.reader) { reader.readerSettings.val = ").append(readerJson).append(';')
             if (pushGeneral) append(" reader.generalSettings.val = ").append(generalJson).append(';')
             append(" }")

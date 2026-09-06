@@ -72,7 +72,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Settings -> Novel reader can now tidy up a chapter before you read it.** Hide a heading that just repeats the chapter name, block images and video, split walls of text into paragraphs, force lowercase, and choose whether a chapter's own styling runs.
 - **Settings -> Novel reader can now open novels in the new shared reader, which is still in development.** The original reader stays the default, and a change applies the next time you open a chapter.
 - **Settings -> Novel reader can now skip chapters marked read, and skip filtered chapters, like manga.** Skipping applies going forward only, so the previous-chapter button still reaches the chapter you just finished.
-- **Settings -> Novel reader -> Text display can now indent your paragraphs and space them apart.** Both are multiples of your text size, so they keep their proportions when you change it, and both work in every reader.
+- **Settings -> Novel reader -> Text display now sets your page margins, paragraph indent and paragraph spacing.** Each of the four margins moves on its own, indent and spacing are multiples of your text size, and every reader honours them.
 
 **Tracking**
 
@@ -99,6 +99,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 **Light novels**
 
+- **Novel chapters now start further down the page and set their paragraphs closer together.** Both are new defaults you can change under Settings -> Novel reader -> Text display, and a page padding you had already set is carried into all four margins.
 - **A novel chapter that fails to load now says so and offers to try again.** It used to leave the previous chapter on screen with no sign anything had gone wrong.
 - **The bookmark button and the WebView, browser and share actions now work while reading a novel.** The bookmark showed as empty whatever the chapter's state and did nothing when tapped; the other three were missing.
 - **Script blocks a novel chapter carries are now stripped before it renders, unless you allow them under Settings -> Novel reader.** Chapter markup comes from the source rather than from Reikai.
