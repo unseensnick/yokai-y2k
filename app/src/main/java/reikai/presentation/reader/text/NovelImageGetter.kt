@@ -62,6 +62,9 @@ class NovelImageGetter(
     /** Some hosts refuse an image without one, so the chapter's own site is sent. */
     private val refererUrl: String?,
     private val resolveView: (Drawable) -> TextView?,
+    /** The views whose images have arrived. Re-measuring is the renderer's job, because only it
+     *  knows whether the text is precomputed, and a precomputed layout ignores a bounds change. */
+    private val onImagesReady: (List<TextView>) -> Unit,
 ) : Html.ImageGetter {
 
     private val contentWidth: Int =
@@ -146,7 +149,7 @@ class NovelImageGetter(
         if (outstandingLoads.decrementAndGet() > 0) return
         val views = dirtyViews.toList()
         dirtyViews.clear()
-        views.forEach { if (it.isAttachedToWindow) it.requestLayout() }
+        if (views.isNotEmpty()) onImagesReady(views)
     }
 
     private fun fitToWidth(drawable: Drawable, wrapper: DrawableWrapper) {

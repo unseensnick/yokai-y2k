@@ -4,6 +4,7 @@ import android.content.Context
 import android.text.Html
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.widget.TextView
 import androidx.core.text.PrecomputedTextCompat
 import androidx.core.widget.TextViewCompat
 import kotlinx.coroutines.CoroutineScope
@@ -53,7 +54,14 @@ class NovelTextRenderer(
                 ?.let { it.width - it.paddingLeft - it.paddingRight }
                 ?.takeIf { it > 0 }
                 ?: context.resources.displayMetrics.widthPixels
-            val imageGetter = NovelImageGetter(context, scope, contentWidth, refererUrl, block::chunkViewFor)
+            val imageGetter = NovelImageGetter(
+                context = context,
+                scope = scope,
+                contentWidthPx = contentWidth,
+                refererUrl = refererUrl,
+                resolveView = block::chunkViewFor,
+                onImagesReady = { views -> remeasureForImages(views, selectable) },
+            )
 
             val spannable = withContext(Dispatchers.Default) {
                 val spanned = Html.fromHtml(
@@ -119,6 +127,36 @@ class NovelTextRenderer(
             // After the text is set, so every image span has a view to find and re-measure.
             imageGetter.startLoading()
             onTextSet()
+        }
+    }
+
+    /**
+     * An image arriving changes its span's height, and a precomputed layout was measured before that,
+     * so it has to be built again or the picture draws clipped into the space the placeholder took.
+     * A selectable view has no precomputed layout, so asking for one is enough.
+     */
+    private fun remeasureForImages(views: List<TextView>, selectable: Boolean) {
+        views.forEach { view -> remeasureOne(view, selectable) }
+    }
+
+    private fun remeasureOne(view: TextView, selectable: Boolean) {
+        if (!view.isAttachedToWindow) return
+        val snapshot = view.text
+        if (selectable || snapshot == null) {
+            view.requestLayout()
+            return
+        }
+        scope.launch {
+            val params = TextViewCompat.getTextMetricsParams(view)
+            val precomputed = withContext(Dispatchers.Default) {
+                PrecomputedTextCompat.create(SpannableStringBuilder(snapshot), params)
+            }
+            if (!view.isAttachedToWindow) return@launch
+            try {
+                TextViewCompat.setPrecomputedText(view, precomputed)
+            } catch (_: IllegalArgumentException) {
+                view.requestLayout()
+            }
         }
     }
 
