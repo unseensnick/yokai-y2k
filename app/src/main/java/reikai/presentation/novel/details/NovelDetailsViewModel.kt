@@ -1227,15 +1227,14 @@ class NovelDetailsViewModel(
     fun runDownloadAction(action: DownloadAction) {
         viewModelScope.launchIO {
             val loaded = state.value as? NovelDetailsState.Loaded ?: return@launchIO
-            // Hidden chapters are never bulk-downloaded, so drop them before picking targets.
+            // The rows on screen, not the anchor's own: on a merged entry the All chip lists whichever
+            // source won the dedup, so downloading the anchor's chapters fetched ones the user was not
+            // looking at and left every visible row undownloaded. The manga side already works this way.
             val hidden = hiddenChaptersPref.get()
-            val available = chapterRepo.getByNovelId(loaded.novel.id).filterNot { hiddenKey(it) in hidden }
-            val downloadedIds = available
-                .filter { downloadManager.isChapterDownloaded(loaded.novel, it) }
-                .mapTo(HashSet()) { it.id }
-            val queuedIds = downloadManager.queueState.value
-                .filter { it.novelId == loaded.novel.id }
-                .mapTo(HashSet()) { it.chapterId }
+            val available = loaded.chapters.filterNot { hiddenKey(it) in hidden }
+            // Already resolved per owning novel, which a merged list needs.
+            val downloadedIds = loaded.downloadedChapterIds
+            val queuedIds = downloadManager.queueState.value.mapTo(HashSet()) { it.chapterId }
             val targets = selectChaptersForDownloadAction(available, action, downloadedIds + queuedIds)
             if (targets.isNotEmpty()) {
                 downloadManager.downloadChapters(targets)
