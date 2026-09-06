@@ -5,7 +5,8 @@ import reikai.domain.reader.ChapterProgress
 
 /**
  * What the reader's progress navigator shows for the open session. [progress] is null while nothing is
- * loaded, which is what leaves the slider off rather than drawing an empty one.
+ * loaded, which is what leaves the slider off rather than drawing an empty one. Only manga reaches that
+ * state: a novel knows its resumed percent before the chapter renders, so it always answers a value.
  */
 @Immutable
 data class ReaderNavigatorState(
