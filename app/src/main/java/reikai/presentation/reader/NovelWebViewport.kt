@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import logcat.logcat
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
+import reikai.presentation.novel.reader.NovelChapterNavigationClient
 import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.novel.reader.NovelReaderWebInterface
 import reikai.presentation.novel.reader.buildReaderHtml
@@ -46,6 +47,10 @@ class NovelWebViewport(
     private val statusBarHeightPx: () -> Int,
 ) : ReaderViewport, TextViewport {
 
+    /** The document URL the chapter was loaded as, so the navigation policy can tell a footnote jump
+     *  from the chapter trying to leave. */
+    private var loadedBaseUrl: String? = null
+
     /** The general block the live document was last given, so a push that would rebuild its DOM only
      *  happens when something in that block actually changed. */
     private var lastGeneralSettings: String? = null
@@ -55,6 +60,7 @@ class NovelWebViewport(
 
     private val webView = ProgressWebView(context).apply {
         setDefaultSettings()
+        webViewClient = NovelChapterNavigationClient(context) { loadedBaseUrl }
         // file:///android_asset bundled CSS/JS + fonts. The dangerous universal/file-from-file access
         // flags stay off (security): the chapter HTML is loaded over an http base URL.
         settings.allowFileAccess = true
@@ -159,6 +165,7 @@ class NovelWebViewport(
         // a file:// base would hand the chapter document a file origin.
         val safeBaseUrl = chapter.baseUrl
             ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        loadedBaseUrl = safeBaseUrl
         webView.loadDataWithBaseURL(safeBaseUrl, html, "text/html", "UTF-8", null)
     }
 

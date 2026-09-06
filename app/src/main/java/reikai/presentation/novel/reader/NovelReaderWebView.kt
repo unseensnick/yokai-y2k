@@ -90,9 +90,12 @@ fun NovelReaderWebView(
     val onProgressLive = rememberUpdatedState(onProgressChanged)
     val onNav = rememberUpdatedState(onNavigate)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    // Held so the navigation policy can tell a footnote jump from the chapter trying to leave.
+    val loadedBaseUrl = remember { mutableStateOf<String?>(null) }
     val webView = remember {
         ProgressWebView(context).apply {
             setDefaultSettings()
+            webViewClient = NovelChapterNavigationClient(context) { loadedBaseUrl.value }
             // file:///android_asset bundled CSS/JS + fonts. The dangerous universal/file-from-file
             // access flags stay off (security): the chapter HTML is loaded over an http base URL.
             this.settings.allowFileAccess = true
@@ -174,6 +177,7 @@ fun NovelReaderWebView(
         // a file:// base would give the chapter document a file origin; pin the scheme so the safety
         // doesn't rest solely on the file-from-file WebView flags staying default-off.
         val safeBaseUrl = baseUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        loadedBaseUrl.value = safeBaseUrl
         webView.loadDataWithBaseURL(safeBaseUrl, document, "text/html", "UTF-8", null)
     }
 
