@@ -38,6 +38,8 @@ class NovelWebViewport(
     private val onProgressChanged: (Int) -> Unit,
     private val onProgressSettled: (Int) -> Unit,
     private val onToggleMenu: () -> Unit,
+    /** Swipe-between-chapters, forward or back. */
+    private val onStepChapter: (forward: Boolean) -> Unit,
     /** Read per load rather than once: the cutout inset is only known after the window has one. */
     private val statusBarHeightPx: () -> Int,
 ) : ReaderViewport, TextViewport {
@@ -71,7 +73,9 @@ class NovelWebViewport(
                 onProgress = { percent -> mainHandler.post { onProgressChanged(percent) } },
                 onTtsMessage = { _, _ -> },
                 onReaderReady = {},
-                onNavigate = {},
+                // Swipe between chapters, which the page reports and the host used to drop, leaving
+                // the setting on the novel reader screen doing nothing.
+                onNavigate = { forward -> mainHandler.post { onStepChapter(forward) } },
             ),
             JS_INTERFACE_NAME,
         )

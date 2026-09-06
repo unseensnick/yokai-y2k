@@ -55,6 +55,10 @@ class ReaderEngine(
     val navigator: StateFlow<ReaderNavigatorState> =
         provider.navigator.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderNavigatorState())
 
+    /** Whether this session wants a progress readout while the chrome is hidden. */
+    val showProgress: StateFlow<Boolean> =
+        provider.showProgress.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     /** Whether a chapter is loading or failed, so the host can show that rather than a blank page. */
     val loadState: StateFlow<ReaderLoadState> =
         provider.loadState.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderLoadState.Idle)

@@ -421,7 +421,9 @@ class ReaderActivity : BaseActivity() {
     private fun ReaderActivityBinding.setComposeOverlay(): Unit = composeOverlay.setComposeContent {
         val state by viewModel.state.collectAsState()
         val engineDialog by engine.dialog.collectAsState()
-        val showPageNumber by readerPreferences.showPageNumber.collectAsState()
+        // RK: the session's own answer, so a novel gets its readout and its own setting decides it.
+        val showProgress by engine.showProgress.collectAsState()
+        val navigatorState by engine.navigator.collectAsState()
         val settingsViewModel = remember {
             ReaderSettingsViewModel(
                 readerState = viewModel.state,
@@ -441,9 +443,11 @@ class ReaderActivity : BaseActivity() {
         TachiyomiTheme(seedColor = seedColor) {
             // RK <--
             Box(modifier = Modifier.fillMaxSize()) {
-                if (!state.menuVisible && showPageNumber) {
+                // RK: both from the engine. Read off manga's preference and manga's position, the
+                // readout never appeared in a novel session and its setting did nothing.
+                if (!state.menuVisible && showProgress) {
                     ReaderPageIndicator(
-                        progress = state.position?.progress,
+                        progress = navigatorState.progress,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .navigationBarsPadding(),

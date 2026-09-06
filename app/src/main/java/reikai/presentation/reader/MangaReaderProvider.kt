@@ -58,6 +58,8 @@ class MangaReaderProvider(
         )
     }
 
+    override val showProgress: Flow<Boolean> = readerPreferences.showPageNumber.changes()
+
     // Manga reports only the in-flight half. A chapter that cannot open at all is upstream's
     // initError, which closes the reader with its own message rather than offering a retry.
     override val loadState: Flow<ReaderLoadState> = viewModel.state

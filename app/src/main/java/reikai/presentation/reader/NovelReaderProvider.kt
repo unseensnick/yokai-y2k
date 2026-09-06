@@ -42,6 +42,8 @@ class NovelReaderProvider(
         )
     }
 
+    override val showProgress: Flow<Boolean> = viewModel.settings.map { it.showProgressPercentage }
+
     override val loadState: Flow<ReaderLoadState> = viewModel.loadState
 
     override fun retryLoad() = viewModel.retryLoad()
@@ -115,6 +117,9 @@ class NovelReaderProvider(
             // Taken from the host being built against rather than held, so a reader rebuilt after a
             // rotation toggles the live Activity's menu instead of the destroyed one's.
             onToggleMenu = host::toggleMenu,
+            // Through the engine rather than the model, so a swipe is sequenced with the viewport the
+            // same way the bar's step buttons are.
+            onStepChapter = { forward -> if (forward) host.engine.nextChapter() else host.engine.previousChapter() },
             statusBarHeightPx = host::displayCutoutTopDp,
         )
     }

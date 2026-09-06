@@ -40,6 +40,12 @@ interface ReaderProvider {
     suspend fun nextChapter()
 
     /**
+     * Whether to show how far into the chapter the reader is while the chrome is hidden. Each type
+     * stores its own answer, which is why the host cannot read one preference for both.
+     */
+    val showProgress: Flow<Boolean>
+
+    /**
      * Whether a chapter is in flight and whether the last attempt failed. Shared because a blank
      * page with no explanation is the same defect whatever the content type, and only the session
      * knows which of its chapters is being fetched.
