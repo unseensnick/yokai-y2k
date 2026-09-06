@@ -9,10 +9,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.util.system.setDefaultSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import logcat.logcat
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction

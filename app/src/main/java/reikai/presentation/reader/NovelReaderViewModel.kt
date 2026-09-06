@@ -34,6 +34,7 @@ import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
+import reikai.domain.novel.interactor.DeleteNovelChaptersBehindReader
 import reikai.domain.novel.interactor.SetNovelReadStatus
 import reikai.domain.novel.interactor.SetNovelViewerFlags
 import reikai.domain.novel.interactor.UpsertNovelHistory
@@ -90,6 +91,7 @@ class NovelReaderViewModel(
     private val getIncognitoState: GetIncognitoState,
     private val setNovelViewerFlags: SetNovelViewerFlags,
     private val novelDownloadCache: NovelDownloadCache,
+    private val deleteChaptersBehindReader: DeleteNovelChaptersBehindReader,
     private val context: Context,
 ) : ViewModel() {
 
@@ -409,6 +411,9 @@ class NovelReaderViewModel(
                 if (trackPreferences.autoUpdateTrack.get()) {
                     chapter?.let { trackNovelChapter.await(context, currentNovelId, it.chapterNumber) }
                 }
+                // After the mark, so the chapter being retired is already read. The manga reader trims
+                // its downloads at the same point (ReaderViewModel.deleteChapterIfNeeded).
+                deleteChaptersBehindReader.await(currentNovelId, orderedIds, id)
             }
         }
     }

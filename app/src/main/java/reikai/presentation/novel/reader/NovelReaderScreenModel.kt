@@ -681,7 +681,10 @@ class NovelReaderScreenModel(
         }
     }
 
-    /** Keep the last N read chapters downloaded (the [NovelPreferences.removeAfterReadSlots] buffer):
+    /** Twin of [reikai.domain.novel.interactor.DeleteNovelChaptersBehindReader], which the shared
+     *  reader calls. Collapses into it when this model is deleted by the reader takeover.
+     *
+     *  Keep the last N read chapters downloaded (the [NovelPreferences.removeAfterReadSlots] buffer):
      *  delete the chapter [slots] positions back in reading order, so sequential reading keeps a rolling
      *  buffer. Skips a bookmarked chapter unless allowed and novels in an excluded category. The separate
      *  "delete after marked as read" pref is handled by [deleteNovelChaptersAfterRead] on the mark itself. */
