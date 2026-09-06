@@ -47,6 +47,26 @@ class NovelContentPipelineTest {
         html shouldContain "&lt;script&gt;"
     }
 
+    /**
+     * Paragraphs rather than one `pre` block: a `pre` renders in the browser's monospace default, so a
+     * plain-text chapter ignored the font the reader had chosen.
+     */
+    @Test
+    fun `a blank line in plain text starts a new paragraph`() {
+        val html = NovelHtmlUtils.plainTextToHtml("First para.\n\nSecond para.")
+
+        html shouldContain "<p>First para.</p>"
+        html shouldContain "<p>Second para.</p>"
+        html shouldNotContain "<pre"
+    }
+
+    @Test
+    fun `a single line break stays inside its paragraph`() {
+        val html = NovelHtmlUtils.plainTextToHtml("One line\nnext line")
+
+        html shouldContain "<p>One line\nnext line</p>"
+    }
+
     @Test
     fun `a script block is stripped from an HTML chapter by default`() = runTest {
         val processed = pipeline.process("<p>a</p><script>evil()</script>", config("/book/ch1.html"))

@@ -33,6 +33,14 @@ body {
   padding-right: var(--readerSettings-padding);
 }
 
+/* RK: a plain-text chapter arrives as paragraphs (NovelHtmlUtils.plainTextToHtml). The rule lives
+   here rather than inline because the "use the chapter's own styling" setting strips style
+   attributes, which would leave the text refusing to wrap. */
+[data-reikai-plain-text] p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 hr {
   margin-top: 20px;
   margin-bottom: 20px;

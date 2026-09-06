@@ -23,6 +23,7 @@ object NovelHtmlUtils {
     )
     private val closingTagRegex = Regex("</\\s*[a-z][a-z0-9:-]*\\s*>", RegexOption.IGNORE_CASE)
     private val stripTagsRegex = Regex("<[^>]+>")
+    private val paragraphBreakRegex = Regex("\n{2,}")
 
     private val titlePatterns = listOf(
         Regex("""<h[1-6][^>]*>.*?</h[1-6]>""", RegexOption.IGNORE_CASE) to true,
@@ -143,7 +144,12 @@ object NovelHtmlUtils {
     }
 
     /** Escapes [text] into an HTML block. An HTML sink must call this: the pipeline leaves plain text
-     *  unescaped so a text renderer can take it verbatim. */
+     *  unescaped so a text renderer can take it verbatim.
+     *
+     *  Paragraphs are real `p` elements, split on blank lines, rather than one `pre`. A `pre` takes the
+     *  browser's monospace default and so ignores the reader's font, and the rule that keeps it wrapping
+     *  has to be an inline style, which the embedded-CSS setting strips. Tsundoku splits for the same
+     *  reason plus one more: paragraph elements are what a read-aloud pass can walk. */
     fun plainTextToHtml(text: String): String {
         val normalized = normalizePlainTextContent(text)
         // Unescape before re-escaping: a source may hand back content where &lt;D&gt; is already
@@ -153,8 +159,15 @@ object NovelHtmlUtils {
         } else {
             normalized
         }
-        val escaped = escapeHtml(decoded)
-        return "<pre data-reikai-plain-text=\"1\" style=\"white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; margin: 0;\">$escaped</pre>"
+        val paragraphs = decoded.split(paragraphBreakRegex)
+            .map { it.trim('\n', ' ', '\t') }
+            .filter { it.isNotEmpty() }
+        if (paragraphs.isEmpty()) return "<div data-reikai-plain-text=\"1\"></div>"
+        return paragraphs.joinToString(
+            separator = "",
+            prefix = "<div data-reikai-plain-text=\"1\">",
+            postfix = "</div>",
+        ) { "<p>${escapeHtml(it)}</p>" }
     }
 
     private fun escapeHtml(text: String): String {
