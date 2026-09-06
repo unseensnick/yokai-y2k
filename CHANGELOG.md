@@ -69,6 +69,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Installed light-novel plugins now show their version in Browse -> Extensions.** Until now the version only appeared once an update was waiting.
 - **Long-pressing an installed light-novel plugin in Browse -> Extensions now offers to remove it.** It asks first, since Android has no uninstall prompt of its own for a plugin.
 - **A novel's chapter list can now be sorted alphabetically, the fourth sort manga already had.**
+- **Settings -> Novel reader can now open novels in the new shared reader, which is still in development.** The original reader stays the default, and a change applies the next time you open a chapter.
 - **Settings -> Novel reader can now skip chapters marked read, and skip filtered chapters, like manga.** Skipping applies going forward only, so the previous-chapter button still reaches the chapter you just finished.
 
 **Tracking**

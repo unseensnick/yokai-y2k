@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import mihon.app.di.appGraph
 import reikai.domain.novel.NovelPreferences
+import reikai.domain.novel.NovelRenderingMode
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -45,6 +46,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
         Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_reading),
             preferenceItems = listOf(
+                // Read when a novel is opened, not while one is on screen, so a change applies to the
+                // next chapter opened rather than the session in progress.
+                Preference.PreferenceItem.ListPreference(
+                    preference = novelPreferences.readerRenderingMode(),
+                    entries = NovelRenderingMode.entries.associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_novel_rendering_mode),
+                ),
                 Preference.PreferenceItem.ListPreference(
                     preference = novelPreferences.readerDefaultOrientation(),
                     entries = ReaderOrientation.entries

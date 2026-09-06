@@ -619,6 +619,11 @@
     <string name="pref_bionic_reading">Bionic reading</string>
     <string name="pref_reader_text_size">Text size</string>
     <!-- RK: novel reader settings, surfaced as content-type sub-groups on the shared Reader screen -->
+    <!-- RK: which reader a novel opens in. The second option is the shared host being built out, so it
+         says so; it becomes a plain renderer name once the old reader goes. -->
+    <string name="pref_novel_rendering_mode">Rendering mode</string>
+    <string name="pref_novel_rendering_mode_legacy">Original reader</string>
+    <string name="pref_novel_rendering_mode_webview">New reader (in development)</string>
     <string name="pref_category_accessibility">Accessibility</string>
     <string name="pref_tap_to_scroll">Tap edges to scroll</string>
     <string name="pref_swipe_between_chapters">Swipe between chapters</string>
