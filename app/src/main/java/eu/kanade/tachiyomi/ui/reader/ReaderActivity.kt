@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -109,6 +110,7 @@ import reikai.presentation.reader.NovelReaderViewModel
 import reikai.presentation.reader.ReaderChapterListDialog
 import reikai.presentation.reader.ReaderDialog
 import reikai.presentation.reader.ReaderEngine
+import reikai.presentation.reader.ReaderLoadState
 import reikai.presentation.reader.ReaderOrientationDialog
 import reikai.presentation.reader.ReaderTextSizeDialog
 import reikai.presentation.reader.ReaderThemeDialog
@@ -359,10 +361,13 @@ class ReaderActivity : BaseActivity() {
             .onEach(::setInitialChapterError)
             .launchIn(lifecycleScope)
 
-        viewModel.state
-            .map { it.isLoadingAdjacentChapter }
-            .distinctUntilChanged()
-            .onEach(::setProgressDialog)
+        // RK: from the engine, so a novel session gets the spinner and the failure surface too. It
+        // had neither: a chapter that failed to load left the previous one on screen in silence.
+        engine.loadState
+            .onEach { state ->
+                setProgressDialog(state is ReaderLoadState.Loading)
+                if (state is ReaderLoadState.Failed) setChapterLoadError(state.message)
+            }
             .launchIn(lifecycleScope)
 
         // RK: registration order is load-bearing. This collector is what installs the viewer, and
@@ -452,6 +457,30 @@ class ReaderActivity : BaseActivity() {
 
             val onDismissRequest = engine::dismissDialog
             when (val dialog = engineDialog) {
+                // RK -->
+                is ReaderDialog.LoadFailed -> {
+                    AlertDialog(
+                        onDismissRequest = onDismissRequest,
+                        title = { Text(stringResource(MR.strings.chapter_load_failed)) },
+                        text = dialog.message?.let { { Text(it) } },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    onDismissRequest()
+                                    engine.retryLoad()
+                                },
+                            ) {
+                                Text(stringResource(MR.strings.action_retry))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = onDismissRequest) {
+                                Text(stringResource(MR.strings.action_cancel))
+                            }
+                        },
+                    )
+                }
+                // RK <--
                 is ReaderDialog.Loading -> {
                     AlertDialog(
                         onDismissRequest = {},
@@ -953,6 +982,13 @@ class ReaderActivity : BaseActivity() {
         logcat(LogPriority.ERROR, error)
         finish()
         toast(error.message)
+    }
+
+    // RK: a chapter that failed after the reader was already open. Unlike initError above, the reader
+    // stays: closing it would throw away the chapter the user was reading, and the failure is often
+    // one retry away.
+    private fun setChapterLoadError(message: String?) {
+        engine.openDialog(ReaderDialog.LoadFailed(message))
     }
 
     /**

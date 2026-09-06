@@ -40,6 +40,16 @@ interface ReaderProvider {
     suspend fun nextChapter()
 
     /**
+     * Whether a chapter is in flight and whether the last attempt failed. Shared because a blank
+     * page with no explanation is the same defect whatever the content type, and only the session
+     * knows which of its chapters is being fetched.
+     */
+    val loadState: Flow<ReaderLoadState>
+
+    /** Re-runs the load that failed. Only reachable from the failure the host raises. */
+    fun retryLoad()
+
+    /**
      * Whether the open chapter is bookmarked, and the verb that flips it. Every content type has
      * chapters and every one can bookmark them, so the bar asks the session rather than reading one
      * engine's model, which is how this control ended up permanently empty for novels.

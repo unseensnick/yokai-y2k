@@ -267,6 +267,15 @@ private class FakeReaderProvider : ReaderProvider {
 
     override val navigator = MutableStateFlow(ReaderNavigatorState())
 
+    override val loadState = MutableStateFlow<ReaderLoadState>(ReaderLoadState.Idle)
+
+    override fun retryLoad() {
+        retried++
+    }
+
+    var retried = 0
+        private set
+
     override val bookmarked = MutableStateFlow(false)
 
     override val webUrl = MutableStateFlow<String?>(null)

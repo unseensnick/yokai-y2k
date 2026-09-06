@@ -128,6 +128,12 @@ class NovelReaderViewModel(
     @Volatile
     private var chapterReadStartTime: Long? = null
 
+    /** Loading until the first chapter renders, so the host shows a spinner rather than a blank page.
+     *  Declared above the init block that calls load(), which would otherwise write it before it exists. */
+    val loadState = MutableStateFlow<ReaderLoadState>(ReaderLoadState.Loading)
+
+    fun retryLoad() = load()
+
     /** Per-novel reader orientation override (a [ReaderOrientation] flagValue; 0 = follow the global
      *  default). Keyed on the opened entry [novelId] (the anchor for a merged novel), since orientation
      *  is a book-level preference like sort/filter rather than per-source progress. */
@@ -328,9 +334,13 @@ class NovelReaderViewModel(
         }
     }
 
-    /** A missing row, an uninstalled source or a parse failure leaves the state as it was, so the host
-     *  keeps rendering instead of tearing down. */
+    /**
+     * A missing row, an uninstalled source or a parse failure leaves the rendered chapter as it was
+     * and reports [ReaderLoadState.Failed], so the host offers a retry rather than tearing down or
+     * leaving the reader looking like nothing happened.
+     */
     private fun load() {
+        loadState.value = ReaderLoadState.Loading
         viewModelScope.launchIO {
             try {
                 incognitoMode = getIncognitoState.await(null)
@@ -350,11 +360,13 @@ class NovelReaderViewModel(
                     progressPercent = (row.lastTextProgress / 100).coerceIn(0L, 100L).toInt(),
                 ).also { liveProgress.value = it.progressPercent }
                 resolveNeighbours()
+                loadState.value = ReaderLoadState.Idle
             } catch (e: Throwable) {
                 // Leaving the reader cancels this scope, and swallowing that would report a load
                 // failure for a chapter nobody is waiting for any more.
                 if (e is CancellationException) throw e
                 logcat(LogPriority.ERROR, e) { "Failed to load novel chapter $currentChapterId" }
+                loadState.value = ReaderLoadState.Failed(e.message)
             }
         }
     }

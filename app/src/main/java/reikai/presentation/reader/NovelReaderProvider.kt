@@ -42,6 +42,10 @@ class NovelReaderProvider(
         )
     }
 
+    override val loadState: Flow<ReaderLoadState> = viewModel.loadState
+
+    override fun retryLoad() = viewModel.retryLoad()
+
     override val bookmarked: Flow<Boolean> = viewModel.bookmarked
 
     override fun toggleBookmark() = viewModel.toggleBookmark()

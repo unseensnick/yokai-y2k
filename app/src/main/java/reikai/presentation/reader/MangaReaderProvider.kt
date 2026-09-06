@@ -58,6 +58,18 @@ class MangaReaderProvider(
         )
     }
 
+    // Manga reports only the in-flight half. A chapter that cannot open at all is upstream's
+    // initError, which closes the reader with its own message rather than offering a retry.
+    override val loadState: Flow<ReaderLoadState> = viewModel.state
+        .map { if (it.isLoadingAdjacentChapter) ReaderLoadState.Loading else ReaderLoadState.Idle }
+
+    // Re-opened through the sheet's own path, which resolves against the live chapter list rather
+    // than the reader's copy, so a retry lands the same way picking the chapter by hand would.
+    override fun retryLoad() {
+        val id = viewModel.state.value.currentChapter?.chapter?.id ?: return
+        chapterList.open(id)
+    }
+
     override val bookmarked: Flow<Boolean> = viewModel.state.map { it.bookmarked }
 
     override fun toggleBookmark() = viewModel.toggleChapterBookmark()

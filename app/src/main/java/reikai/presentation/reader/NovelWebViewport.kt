@@ -56,7 +56,13 @@ class NovelWebViewport(
         settings.allowFileAccess = true
         addJavascriptInterface(
             NovelReaderWebInterface(
-                onHide = { mainHandler.post { onToggleMenu() } },
+                // RK: logged because the chrome has been seen stopping responding to taps while the
+                // page still scrolled, which means touch reached the WebView. This says whether the
+                // tap left `core.js` at all, so the next occurrence is diagnosable rather than a guess.
+                onHide = {
+                    if (BuildConfig.DEBUG) logcat { "reader: tap-to-toggle reached the host" }
+                    mainHandler.post { onToggleMenu() }
+                },
                 onConsole = { msg -> if (BuildConfig.DEBUG) logcat { msg } },
                 // The two carry the same number but mean different things: `progress` is every scroll
                 // frame and drives the chrome, `save` fires at scroll-end and is what gets persisted.

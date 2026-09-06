@@ -55,6 +55,12 @@ class ReaderEngine(
     val navigator: StateFlow<ReaderNavigatorState> =
         provider.navigator.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderNavigatorState())
 
+    /** Whether a chapter is loading or failed, so the host can show that rather than a blank page. */
+    val loadState: StateFlow<ReaderLoadState> =
+        provider.loadState.stateIn(viewModelScope, SharingStarted.Eagerly, ReaderLoadState.Idle)
+
+    fun retryLoad() = provider.retryLoad()
+
     /** Whether the open chapter is bookmarked, so the bar's control reflects this session's chapter. */
     val bookmarked: StateFlow<Boolean> =
         provider.bookmarked.stateIn(viewModelScope, SharingStarted.Eagerly, false)
