@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import mihon.app.di.appGraph
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRenderingMode
+import reikai.presentation.novel.reader.readerFonts
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -22,8 +23,8 @@ import tachiyomi.core.common.preference.Preference as PreferenceStoreEntry
  * Light-novel reader settings, a top-level Settings entry beside [SettingsMangaReaderScreen]. Settings
  * of the same name on the two screens are deliberately separate values; see that screen's note.
  *
- * The live-tuning display controls (font, size, theme, colours) stay in the in-reader gear sheet,
- * which previews them as you change them.
+ * Text size and the page colours stay in the in-reader controls, which preview them as you change
+ * them. Everything else lives here, because the shared reader has no sheet of its own yet.
  */
 object SettingsNovelReaderScreen : SearchableSettings {
 
@@ -46,20 +47,53 @@ object SettingsNovelReaderScreen : SearchableSettings {
     }
 
     /**
-     * Paragraph shape, applied by whichever renderer draws the chapter. Both are multiples of the
-     * text size, so they hold their proportions when it changes. Novel-only by mechanism: a manga
-     * page is an image the source ships, so there is no text for them to act on.
+     * How the page is set, applied by whichever renderer draws the chapter. Indent and paragraph
+     * spacing are multiples of the text size, so they hold their proportions when it changes.
+     * Novel-only by mechanism: a manga page is an image the source ships, so there is no text for
+     * any of this to act on.
      */
     @Composable
     private fun getTextDisplayGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
         val indentPref = novelPreferences.readerParagraphIndent()
         val spacingPref = novelPreferences.readerParagraphSpacing()
+        val lineSpacingPref = novelPreferences.readerLineSpacing()
         val indent by indentPref.collectAsState()
         val spacing by spacingPref.collectAsState()
+        val lineSpacing by lineSpacingPref.collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_text_display),
             preferenceItems = listOf(
+                Preference.PreferenceItem.ListPreference(
+                    preference = novelPreferences.readerFontFamily(),
+                    // The face names are proper nouns; only the empty "use the source's own" entry
+                    // is a label, so it is the one that comes from a string resource.
+                    entries = readerFonts.associate { font ->
+                        font.family to if (font.family.isEmpty()) {
+                            stringResource(MR.strings.pref_novel_font_original)
+                        } else {
+                            font.name
+                        }
+                    },
+                    title = stringResource(MR.strings.pref_novel_font),
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    value = (lineSpacing * TENTHS).roundToInt(),
+                    valueRange = 10..25,
+                    title = stringResource(MR.strings.pref_novel_line_spacing),
+                    valueString = "%.1fx".format(lineSpacing),
+                    onValueChanged = { lineSpacingPref.set(it / TENTHS) },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = novelPreferences.readerTextAlign(),
+                    entries = mapOf(
+                        "left" to stringResource(MR.strings.pref_novel_text_align_left),
+                        "center" to stringResource(MR.strings.pref_novel_text_align_center),
+                        "justify" to stringResource(MR.strings.pref_novel_text_align_justify),
+                        "right" to stringResource(MR.strings.pref_novel_text_align_right),
+                    ),
+                    title = stringResource(MR.strings.pref_novel_text_align),
+                ),
                 marginRow(novelPreferences.readerMarginTop(), MR.strings.pref_margin_top),
                 marginRow(novelPreferences.readerMarginBottom(), MR.strings.pref_margin_bottom),
                 marginRow(novelPreferences.readerMarginLeft(), MR.strings.pref_margin_left),

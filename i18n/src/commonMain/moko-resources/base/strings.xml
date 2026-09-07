@@ -625,6 +625,14 @@
     <string name="chapter_load_failed">Couldn\'t load this chapter</string>
     <!-- RK: novel text display, applied by whichever renderer draws the chapter -->
     <string name="pref_category_text_display">Text display</string>
+    <string name="pref_novel_font">Font</string>
+    <string name="pref_novel_font_original">Original</string>
+    <string name="pref_novel_line_spacing">Line spacing</string>
+    <string name="pref_novel_text_align">Alignment</string>
+    <string name="pref_novel_text_align_left">Left</string>
+    <string name="pref_novel_text_align_center">Center</string>
+    <string name="pref_novel_text_align_justify">Justify</string>
+    <string name="pref_novel_text_align_right">Right</string>
     <string name="pref_margin_top">Top margin</string>
     <string name="pref_margin_bottom">Bottom margin</string>
     <string name="pref_margin_left">Left margin</string>
