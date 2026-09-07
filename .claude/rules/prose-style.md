@@ -89,6 +89,14 @@ plus History. Name the two things, or lean on the title above it ("Replaces the 
 Recents tab" under "Combine Updates and History"). The same care goes for a bare "these" or "them"
 whose referent is a screen away.
 
+**Write the string for someone who has never seen the code, and read it back on the screen it sits
+on.** Two failures the owner caught in one session, both of which read fine in the source. A font
+option labelled "Original" named nothing a reader could recognise; it says "Default" now, with a line
+saying what you get instead, because Android exposes no name for the font it resolves. And an empty
+state reading "Nothing added yet. Use Add font below." was wrong twice over on a screen that already
+listed eleven fonts and whose Add button floats beside the text rather than under it. **Never
+describe a control by its position**, and never assert emptiness that only holds for one section.
+
 Strings ported from Komikku or TachiyomiSY keep their upstream shape like any other inherited code,
 so measure ours against Mihon before calling a string ours to fix. Translations carry none of
 Reikai's own keys, so rewriting a base string costs no translation churn.
