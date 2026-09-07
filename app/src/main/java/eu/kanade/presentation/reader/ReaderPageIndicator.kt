@@ -24,6 +24,9 @@ fun ReaderPageIndicator(
     modifier: Modifier = Modifier,
 ) {
     if (progress == null) return
+    // RK: upstream's `totalPages <= 0` guard, kept through the retyping. A chapter whose pages have
+    // not loaded reports a count of zero, and "1 / 0" is worse than showing nothing.
+    if (progress is ChapterProgress.Pages && progress.pageCount <= 0L) return
 
     // RK: labels come from the position kernel, so this reads a page count for manga and a percentage
     // for a continuously scrolled chapter without knowing which it has.

@@ -74,7 +74,6 @@ class NovelContentPipeline(private val preferences: NovelPreferences) {
         return NovelChapterContent(
             text = content,
             isPlainText = pre.isPlainText,
-            chapterUrl = config.chapterUrl,
         )
     }
 

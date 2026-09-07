@@ -164,10 +164,10 @@ object NovelHtmlUtils {
     /** Escapes [text] into an HTML block. An HTML sink must call this: the pipeline leaves plain text
      *  unescaped so a text renderer can take it verbatim.
      *
-     *  Paragraphs are real `p` elements, split on blank lines, rather than one `pre`. A `pre` takes the
-     *  browser's monospace default and so ignores the reader's font, and the rule that keeps it wrapping
-     *  has to be an inline style, which the embedded-CSS setting strips. Tsundoku splits for the same
-     *  reason plus one more: paragraph elements are what a read-aloud pass can walk. */
+     *  Paragraphs are real `p` elements rather than one `pre`, which would take the browser's monospace
+     *  default and need an inline style the embedded-CSS setting strips. A break inside a paragraph is
+     *  a `br`, not a newline: a newline survives `pre-wrap` in a WebView and collapses to a space in
+     *  the text renderer, laying the same chapter out two ways. */
     fun plainTextToHtml(text: String): String {
         val normalized = normalizePlainTextContent(text)
         // Unescape before re-escaping: a source may hand back content where &lt;D&gt; is already
@@ -185,7 +185,7 @@ object NovelHtmlUtils {
             separator = "",
             prefix = "<div data-reikai-plain-text=\"1\">",
             postfix = "</div>",
-        ) { "<p>${escapeHtml(it)}</p>" }
+        ) { "<p>${escapeHtml(it).replace("\n", "<br>")}</p>" }
     }
 
     private fun escapeHtml(text: String): String {

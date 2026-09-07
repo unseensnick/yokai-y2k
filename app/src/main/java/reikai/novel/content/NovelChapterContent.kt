@@ -4,5 +4,4 @@ package reikai.novel.content
 data class NovelChapterContent(
     val text: String,
     val isPlainText: Boolean,
-    val chapterUrl: String?,
 )

@@ -92,8 +92,6 @@ class NovelTextRenderer(
             if (token != block.renderToken || !block.container.isAttachedToWindow) return@launch
             block.ensureChunkCount(chunks.size)
             if (chunks.isEmpty()) {
-                block.chunkStarts = IntArray(0)
-                block.fullText = ""
                 onTextSet()
                 return@launch
             }
@@ -105,13 +103,6 @@ class NovelTextRenderer(
                 params?.let { p -> chunks.map { PrecomputedTextCompat.create(it, p) } }
             }
             if (token != block.renderToken || !block.container.isAttachedToWindow) return@launch
-
-            val starts = IntArray(chunks.size)
-            var offset = 0
-            chunks.forEachIndexed { i, chunk ->
-                starts[i] = offset
-                offset += chunk.length
-            }
 
             block.clearSelections()
             if (precomputed == null) {
@@ -127,8 +118,6 @@ class NovelTextRenderer(
                     }
                 }
             }
-            block.chunkStarts = starts
-            block.fullText = spannable.toString()
             // After the text is set, so every image span has a view to find and re-measure.
             imageGetter.startLoading()
             onTextSet()

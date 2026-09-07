@@ -14,8 +14,8 @@ import android.widget.TextView
  *
  * One view makes layout, span lookup and selection hit-testing cost O(chapter); tsundoku measured
  * constant garbage collection and multi-second touch handling on large chapters before chunking.
- * Ported from tsundoku (`textview/ChapterTextBlock.kt`); its selection and placeholder members are
- * left out until the steps that need them (quotes and read-aloud).
+ * Ported from tsundoku (`textview/ChapterTextBlock.kt`); its selection and placeholder members and
+ * its chunk-offset index are left out until the steps that need them (quotes and read-aloud).
  */
 class ChapterTextBlock(
     context: Context,
@@ -31,12 +31,6 @@ class ChapterTextBlock(
     }
 
     val chunkViews = mutableListOf<TextView>()
-
-    /** Start offset of each chunk's text within [fullText]. */
-    var chunkStarts = IntArray(0)
-
-    /** The chunks concatenated, which is what an offset above is measured against. */
-    var fullText: String? = null
 
     /**
      * Bumped when a render of this block starts. A render coroutine captures the value and bails if

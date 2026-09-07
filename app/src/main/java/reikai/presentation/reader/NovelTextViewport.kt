@@ -293,7 +293,10 @@ class NovelTextViewport(
     }
 
     override fun seekTo(progress: ChapterProgress) {
-        val fraction = progress.fraction ?: return
+        // A page index is not a scroll position, and reading one as a fraction would seek to a third
+        // of the chapter for page 3 of 10. The twin rejects it the same way.
+        if (progress !is ChapterProgress.Percent) return
+        val fraction = progress.fraction
         val range = recycler.computeVerticalScrollRange() - recycler.computeVerticalScrollExtent()
         if (range <= 0) {
             pendingProgress = fraction

@@ -16,6 +16,7 @@ import coil3.imageLoader
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -136,6 +137,10 @@ class NovelImageGetter(
                     .build()
                 val drawable = context.imageLoader.execute(request).image?.asDrawable(context.resources)
                 if (drawable != null) fitToWidthAndInvalidate(drawable, wrapper)
+            } catch (e: CancellationException) {
+                // A viewport teardown cancels every outstanding image, and reporting each as a
+                // failure buried real ones. Rethrown so the coroutine still ends cancelled.
+                throw e
             } catch (e: Exception) {
                 logcat(LogPriority.DEBUG, e) { "Failed to load a chapter image" }
             } finally {

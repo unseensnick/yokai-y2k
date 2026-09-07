@@ -60,11 +60,16 @@ class NovelContentPipelineTest {
         html shouldNotContain "<pre"
     }
 
+    /**
+     * As a `br` rather than a newline: a WebView shows a bare newline because the stylesheet puts the
+     * paragraph in `pre-wrap`, and the text renderer collapses it to a space, so the two laid the same
+     * chapter out differently.
+     */
     @Test
     fun `a single line break stays inside its paragraph`() {
         val html = NovelHtmlUtils.plainTextToHtml("One line\nnext line")
 
-        html shouldContain "<p>One line\nnext line</p>"
+        html shouldContain "<p>One line<br>next line</p>"
     }
 
     /**
@@ -83,7 +88,7 @@ class NovelContentPipelineTest {
             blockMedia = false,
         )
 
-        stripped shouldContain "First line\nsecond line"
+        stripped shouldContain "First line<br>second line"
     }
 
     @Test
