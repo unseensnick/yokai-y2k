@@ -1,6 +1,7 @@
 package reikai.novel.source
 
 import reikai.domain.novel.NovelPreferences
+import reikai.domain.novel.NovelRenderingMode
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.model.Novel
 import reikai.domain.novel.model.NovelChapter
@@ -44,13 +45,16 @@ class NovelChapterTextLoader(
      * as the base URL so relative image URLs resolve.
      *
      * What comes back is pipeline output, never raw source markup, so a renderer must not process it
-     * again. [RenderTarget.WEB_VIEW] because both readers are WebViews today.
+     * again. The target follows the rendering mode, which decides whether embedded CSS and JS survive.
      */
     suspend fun load(chapter: NovelChapter): Pair<String, String?> {
         val (raw, baseUrl) = fetch(chapter)
         val config = NovelContentConfig.from(
             preferences = preferences,
-            target = RenderTarget.WEB_VIEW,
+            target = when (preferences.readerRenderingMode().get()) {
+                NovelRenderingMode.NATIVE -> RenderTarget.TEXT_VIEW
+                else -> RenderTarget.WEB_VIEW
+            },
             chapterUrl = chapter.url,
             chapterName = chapter.name,
         )
