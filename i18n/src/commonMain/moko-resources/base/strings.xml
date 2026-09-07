@@ -182,17 +182,17 @@
     <string name="action_merge_source_icons">Show source icons on merged covers</string>
     <!-- RK: master merging switch (Phase 5) -->
     <string name="action_series_merging">Group series across sources</string>
-    <string name="pref_series_merging_summary">Collapse the same series from different sources into one library entry. Off shows each source separately; your groups are kept.</string>
+    <string name="pref_series_merging_summary">Collapse the same series from different sources into one entry</string>
     <!-- RK: add-time grouping prompt (Phase 5) -->
     <string name="action_add_to_group">Add to existing group</string>
     <string name="action_add_to_group_hint">Pick the entries it belongs with</string>
     <string name="action_add_to_group_selected">%1$d picked</string>
     <string name="pref_suggest_group_same_title">Suggest grouping same-titled series</string>
-    <string name="pref_suggest_group_same_title_summary">When you add a series that matches one already in your library, offer to add it to the existing group.</string>
+    <string name="pref_suggest_group_same_title_summary">Offer to group a new series with a matching library entry</string>
     <!-- RK: novel merge (P5 S8) -->
     <string name="action_merge_require_author">Also require matching author</string>
     <string name="pref_clear_merges">Clear all merges</string>
-    <string name="pref_clear_merges_summary">Split every merged series back into separate per-source entries.</string>
+    <string name="pref_clear_merges_summary">Split every merged series back into separate per-source entries</string>
     <string name="merges_cleared">Merged series cleared</string>
     <string name="pref_repair_novel_details">Repair novel details</string>
     <string name="pref_repair_novel_details_summary">Find novels showing another novel\'s title or cover and re-fetch them from their own source.</string>
@@ -205,13 +205,13 @@
     <string name="pref_preferred_sources_empty">No preferred sources yet. Add one below to rank it.</string>
     <string name="pref_preferred_sources_add">Add a source</string>
     <string name="pref_sync_tracker_links_grouped">Share trackers across merged sources</string>
-    <string name="pref_sync_tracker_links_grouped_summary">A tracker on a merged series counts for every source in it, and each source keeps its own copy when you split them apart. Turn this off to track each source separately.</string>
+    <string name="pref_sync_tracker_links_grouped_summary">One tracker covers every source in a merged series</string>
     <!-- RK: recommendations settings -->
     <string name="pref_recommendations">Recommendations</string>
     <string name="pref_recommendations_summary">Related-manga suggestions and taste profile</string>
     <string name="pref_recommendation_sources">Sources</string>
     <string name="pref_enable_related_mangas">Show related manga</string>
-    <string name="pref_enable_related_mangas_summary">Suggest similar manga on the details page. Turning this off also stops the searches it makes, which can speed up slow sources</string>
+    <string name="pref_enable_related_mangas_summary">Suggest similar manga on the details page</string>
     <string name="pref_related_placement">Related manga placement</string>
     <string name="pref_related_placement_inline">On the details page</string>
     <string name="pref_related_placement_menu">In the three-dot menu</string>
@@ -225,7 +225,7 @@
     <string name="pref_refresh_now_started">Refreshing tracker libraries…</string>
     <string name="pref_recommendation_injection">Suggestions from your tracking</string>
     <string name="pref_inject_cross_recommendation">Because you\'re reading…</string>
-    <string name="pref_inject_cross_recommendation_summary">For a tracked manga, add titles similar to the ones you\'ve read that your tracker links to it</string>
+    <string name="pref_inject_cross_recommendation_summary">Also suggest what your highly rated titles are similar to</string>
     <string name="pref_inject_tag_search">Matching your taste</string>
     <string name="pref_inject_tag_search_summary">For a tracked manga, search this source for the genres you enjoy</string>
     <string name="pref_recommendation_reranking">Reranking</string>
@@ -235,7 +235,7 @@
     <string name="pref_serendipity">Serendipity</string>
     <string name="pref_recommendation_filters">Filters</string>
     <string name="pref_hide_in_library_recommendations">Hide manga already in my library</string>
-    <string name="pref_hide_in_library_recommendations_summary">Drop suggestions that match a library entry, matched by title across sources and trackers</string>
+    <string name="pref_hide_in_library_recommendations_summary">Hide suggestions already in your library</string>
     <string name="pref_recommendation_filters_summary">Hide already-tracked manga from suggestions by their status</string>
     <string name="pref_hide_tracked_reading_completed">Hide reading &amp; completed</string>
     <string name="pref_hide_tracked_dropped">Hide dropped</string>
@@ -297,7 +297,7 @@
     <string name="recents_mode_grouped">Grouped</string>
     <string name="recents_mode_feed">Feed</string>
     <string name="pref_combined_recents_tab">Combine Updates and History</string>
-    <string name="pref_combined_recents_tab_summary">One Recents tab holding both, plus a combined feed. Its filters start out copied from Updates.</string>
+    <string name="pref_combined_recents_tab_summary">One Recents tab for both, with a combined feed</string>
     <!-- RK: refresh feedback on the combined All chip (both libraries update at once) -->
     <string name="updating_both_libraries">Updating both libraries</string>
     <!-- RK: light-novel browse (P5 S3a) -->
@@ -441,7 +441,7 @@
     <string name="lock_never">Never</string>
     <string name="hide_notification_content">Hide notification content</string>
     <string name="hide_adult_notification_content">Hide adult content in notifications</string>
-    <string name="hide_adult_notification_content_summary">Keep adult titles and covers off notifications and the lock screen. Normal library notifications are unaffected.</string>
+    <string name="hide_adult_notification_content_summary">Keep adult titles and covers out of notifications</string>
     <string name="secure_screen">Secure screen</string>
     <string name="secure_screen_summary">Secure screen hides app contents when switching apps and block screenshots</string>
     <string name="firebase_summary">Sending crash logs and analytics will allow us to identify and fix issues, improve performance, and make future updates more relevant to your needs</string>
@@ -612,7 +612,7 @@
     <!-- RK --><string name="pref_mark_read_on_skip">Mark chapter read when skipping ahead</string>
     <string name="pref_mark_read_on_skip_summary">When you jump to the next chapter, mark the chapter you skipped as read</string>
     <string name="pref_auto_webtoon_mode">Auto webtoon mode</string>
-    <string name="pref_auto_webtoon_mode_summary">Read manhwa, manhua and webtoons in webtoon mode automatically. A mode you pick for a series always wins</string>
+    <string name="pref_auto_webtoon_mode_summary">Read manhwa, manhua and webtoons in webtoon mode, unless you change the reading mode</string>
     <string name="auto_webtoon_snack">Reading webtoon style</string>
     <string name="pref_reader_bottom_buttons">Bottom bar buttons</string>
     <string name="pref_auto_scroll">Auto-scroll</string>
@@ -652,7 +652,7 @@
     <string name="pref_novel_rendering_mode_webview">New reader (in development)</string>
     <string name="pref_novel_rendering_mode_native">Native text (in development)</string>
     <string name="pref_novel_text_selectable">Select text by long press</string>
-    <string name="pref_novel_text_selectable_summary">Long press a passage to select, copy or share it. Links stop responding to taps while this is on, and the change applies to the next chapter you open.</string>
+    <string name="pref_novel_text_selectable_summary">Long press to select text, which stops links responding to taps</string>
     <string name="pref_category_accessibility">Accessibility</string>
     <string name="pref_tap_to_scroll">Tap edges to scroll</string>
     <string name="pref_swipe_between_chapters">Swipe between chapters</string>
@@ -800,16 +800,16 @@
     <string name="services">Trackers</string>
     <string name="tracking_info">One-way sync to update the chapter progress in external tracker services. Set up tracking for individual entries from their tracking button.</string>
     <string name="pref_ranobedb_sync_while_reading">Update RanobeDB while you read</string>
-    <string name="pref_ranobedb_sync_while_reading_summary">Reading a novel sets its status on RanobeDB. Each update clears that entry&apos;s labels, notes and volume count, because the site offers no way to read them back first.</string>
+    <string name="pref_ranobedb_sync_while_reading_summary">Sets status on RanobeDB as you read, clearing that entry&apos;s labels, notes and volume count</string>
     <string name="pref_novelupdates_custom_lists">Use my own NovelUpdates lists</string>
-    <string name="pref_novelupdates_custom_lists_summary">Choose which of your lists each status moves a novel to, instead of the five NovelUpdates starts with.</string>
+    <string name="pref_novelupdates_custom_lists_summary">Pick which list each status moves a novel to</string>
     <string name="pref_novelupdates_configure_lists">Match statuses to lists</string>
-    <string name="pref_novelupdates_configure_lists_summary">Tap a status to move it to your next list.</string>
+    <string name="pref_novelupdates_configure_lists_summary">Tap a status to move it to your next list</string>
     <string name="pref_novelupdates_lists_loading">Loading your lists</string>
     <string name="pref_novelupdates_lists_loaded">%1$d lists loaded</string>
     <string name="pref_novelupdates_lists_failed">Could not load your NovelUpdates lists</string>
     <string name="pref_novellist_api_url">NovelList server address</string>
-    <string name="pref_novellist_api_url_summary">Leave empty unless NovelList moves its server. Tracking stops working if this is wrong.</string>
+    <string name="pref_novellist_api_url_summary">Leave empty unless NovelList moves its server. A wrong address stops tracking.</string>
     <string name="enhanced_services">Enhanced trackers</string>
     <string name="enhanced_services_not_installed">Available but source not installed: %s</string>
     <string name="enhanced_tracking_info">Provides enhanced features for specific sources. Entries are automatically tracked when added to your library.</string>
@@ -931,7 +931,7 @@
     <string name="pref_verbose_logging">Verbose logging</string>
     <string name="pref_verbose_logging_summary">Print verbose logs to system log (reduces app performance)</string>
     <string name="pref_track_update_errors">Track update errors</string>
-    <string name="pref_track_update_errors_summary">Record entries that fail to update and show them in a list, opened from the library menu or the failed-update notification. Off writes a log file instead</string>
+    <string name="pref_track_update_errors_summary">List entries that fail to update instead of writing a log file</string>
     <string name="label_update_errors">Update errors</string>
     <string name="info_empty_update_errors">No update errors</string>
     <string name="action_clear_all">Clear all</string>
@@ -1501,7 +1501,7 @@
     <string name="rating0">Disaster</string>
     <string name="no_rating">No rating</string>
     <string name="pref_enable_adult_sources">Enable adult sources (E-Hentai)</string>
-    <string name="pref_enable_adult_sources_summary">Adds the built-in E-Hentai sources to Browse. ExHentai also requires you to log in.</string>
+    <string name="pref_enable_adult_sources_summary">Adds the built-in E-Hentai sources to Browse. ExHentai also needs a sign-in.</string>
     <string name="recheck_login_status">Recheck login status</string>
     <string name="alternative_login_page">Alternative login page</string>
     <string name="skip_page_restyling">Skip page restyling</string>
@@ -1518,7 +1518,7 @@
     <string name="pref_mangadex_sync_follows_to_library">Sync MangaDex entries to your library</string>
     <string name="pref_mangadex_sync_follows_to_library_summary">Pulls entries from MangaDex into your library if they are not already added.</string>
     <string name="pref_mangadex_push_favorites_to_mangadex">Sync library entries to MangaDex</string>
-    <string name="pref_mangadex_push_favorites_to_mangadex_summary">Syncs any non-MDList tracked entries to MangaDex as reading.</string>
+    <string name="pref_mangadex_push_favorites_to_mangadex_summary">Syncs any non-MDList tracked entries to MangaDex as reading</string>
     <string name="pref_mangadex_sign_in_required">Sign in to MangaDex under Tracking first</string>
     <string name="pref_mangadex_sync_started">Sync started</string>
     <string name="pref_mangadex_sync_follows_result">Follows synced to your library</string>
@@ -1538,7 +1538,7 @@
     <string name="eh_remove_favorite_remote">Also remove from E-Hentai favorites</string>
     <string name="eh_favorites_backup">Favorites backup</string>
     <string name="eh_backup_favorites_to_account">Back up favorites to account</string>
-    <string name="eh_backup_favorites_to_account_summary">Add favorited galleries to your E-Hentai account. Removing one from your library keeps it on the account.</string>
+    <string name="eh_backup_favorites_to_account_summary">Add favorited galleries to your E-Hentai account. Removing one from your library keeps it there.</string>
     <string name="pref_eh_favorites_slot">Default favorite category</string>
     <string name="eh_favorites_slot">Favorites %d</string>
     <string name="eh_back_up_favorites_now">Back up all favorites now</string>
@@ -1631,9 +1631,9 @@
     <!-- RK: the Browse Feed tab and its settings -->
     <string name="label_feed">Feed</string>
     <string name="pref_show_feed_tab">Show Feed tab</string>
-    <string name="pref_show_feed_tab_summary">A tab in Browse showing what each source you add to it has right now.</string>
+    <string name="pref_show_feed_tab_summary">A Browse tab showing the latest from sources you pick</string>
     <string name="pref_feed_tab_first">Open Browse on the Feed tab</string>
-    <string name="pref_feed_tab_first_summary">Puts Feed first, so Browse opens on it. It loads from every source in the feed, which is worth knowing on a metered connection.</string>
+    <string name="pref_feed_tab_first_summary">Open Browse on Feed, which loads every source in it</string>
     <string name="action_add_to_feed">Add to feed</string>
     <string name="feed_empty">Nothing in your feed yet. Add a source to see what it has.</string>
     <string name="backup_feed_and_saved_searches">Feed and saved searches</string>

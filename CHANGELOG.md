@@ -415,6 +415,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - Kitsu tracking now runs entirely on Kitsu's GraphQL API rather than the older one it is replacing (partly synced from Mihon, mihonapp/mihon#3792). The recommendation taste profile and Fill from tracker moved across too, so nothing is left on the old endpoint.
 - Tracker internals tidied across all eleven upstream trackers, covering token expiry math, refresh-response parsing and how each tracker learns its own id (synced from Mihon, mihonapp/mihon#3900). No change to sign-in, search or progress sync.
 - okio updated to 3.18.2 and conscrypt to 2.7.0 (synced from Mihon, mihonapp/mihon#3894 and mihonapp/mihon#3897).
+- Twenty-one settings descriptions rewritten shorter and plainer, to read like the ones Mihon ships rather than a paragraph under each switch.
 - The pre-release channel is now called nightly rather than preview, matching Mihon (synced from Mihon, mihonapp/mihon#3760). The About screen and the release title say Nightly; downloads keep their file names and installs are unaffected.
 - The migration source list now saves its order off the UI thread, once per change instead of possibly twice.
 - Every list screen now stops querying a few seconds after you leave it, instead of running as long as the app does: the library, Recents, the source and extension lists, and the category, migration, cover and upcoming screens (synced from Mihon, mihonapp/mihon#3716 through mihonapp/mihon#3762).

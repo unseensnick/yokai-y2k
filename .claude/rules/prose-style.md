@@ -66,6 +66,27 @@ Human technical writing does these; machine writing avoids them.
 
 Plain copulatives: "there is a", "it has two callers". Short declaratives next to long ones, so rhythm varies. Definite statements when the evidence supports one ("this is the only caller", "that never fires"), instead of hedging everything to the same middling confidence. Real hedges when confidence is genuinely low ("probably", "I think", "worth checking"); uniform confidence across every sentence is its own tell. Ordinary phrasing where it reads naturally, including "because of", "in order to", and "the fact that". Admitting a gap directly: "I don't know", "I didn't check that", "I got that wrong."
 
+## In-app strings match Mihon, not this file
+
+A string in `i18n/src/commonMain/moko-resources/base/strings.xml` is UI, and its register is set by
+the 940 strings Mihon already ships beside it, which are far terser than anything else here. Measured
+against them: a preference summary averages **7 words**, ends without a period, and is one sentence
+(5% carry a period, 3% run to two). A title or action label averages 3.
+
+**The failure mode is the second sentence.** It arrives carrying a caveat ("Off shows each source
+separately"), the rationale behind the implementation ("because the site offers no way to read them
+back first"), or a restatement of the switch itself ("Turn this off to track each source
+separately"). All three belong in the plan doc, not under a toggle. A 2026-09-07 audit found Reikai's
+own summaries at double Mihon's length with 27% running to two sentences; twenty-one were rewritten.
+
+Two sentences are right when the second one is a warning the user cannot recover from or a setup step
+they cannot guess: a destructive sync, a wrong address that silently stops tracking, a second sign-in.
+Mihon keeps those at that length too. Nothing else earns one.
+
+Strings ported from Komikku or TachiyomiSY keep their upstream shape like any other inherited code,
+so measure ours against Mihon before calling a string ours to fix. Translations carry none of
+Reikai's own keys, so rewriting a base string costs no translation churn.
+
 ## Calibration
 
 This is about register, not a banned-words filter. A word on the avoid list is fine when it is the precise term: `robust` in a citation of code that is named that, `key` for a map key, `landscape` for an actual one. The failure this prevents is uniform, inflated, evenly-hedged prose where every sentence carries the same weight. Direct and specific beats polished.
