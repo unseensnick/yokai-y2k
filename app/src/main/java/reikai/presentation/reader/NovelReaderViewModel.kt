@@ -149,6 +149,8 @@ class NovelReaderViewModel(
 
     fun setKeepScreenOn(enabled: Boolean) = novelPreferences.readerKeepScreenOn().set(enabled)
 
+    fun setAutoScroll(enabled: Boolean) = novelPreferences.readerAutoScroll().set(enabled)
+
     fun setFontSize(size: Int) = novelPreferences.readerFontSize().set(size)
 
     fun setFollowSystemTheme() = novelPreferences.readerFollowSystemTheme().set(true)

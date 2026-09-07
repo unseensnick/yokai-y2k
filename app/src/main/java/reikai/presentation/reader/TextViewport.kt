@@ -31,4 +31,11 @@ interface TextViewport {
      * in place rather than waiting for the next chapter.
      */
     fun applySettings(settings: NovelReaderSettings)
+
+    /**
+     * Runs or stops the continuous scroll at [pixelsPerFrame], the speed the user set. The host
+     * decides rather than the renderer, because auto-scroll pauses while the chrome is showing and
+     * only the host knows that it is.
+     */
+    fun setAutoScroll(running: Boolean, pixelsPerFrame: Float)
 }

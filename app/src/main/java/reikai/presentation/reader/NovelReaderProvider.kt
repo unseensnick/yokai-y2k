@@ -90,6 +90,12 @@ class NovelReaderProvider(
             viewModel.setThemeColors(background, textColor)
     }
 
+    override val autoScroll: ReaderAutoScroll = object : ReaderAutoScroll {
+        override val enabled: Flow<Boolean> = viewModel.settings.map { it.autoScroll }
+
+        override fun toggle() = viewModel.setAutoScroll(!viewModel.settings.value.autoScroll)
+    }
+
     override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }
 
     override val keepScreenOn: Flow<Boolean> = viewModel.settings.map { it.keepScreenOn }

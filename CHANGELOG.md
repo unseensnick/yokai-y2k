@@ -88,6 +88,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Text in the native novel reader can now be selected, copied and shared, switched on under Settings -> Novel reader.** Links stop responding to taps while it is on, so the two are a choice rather than both at once.
 - **Font, line spacing and text alignment are now under Settings -> Novel reader, so the new readers can set them.** They only had controls in the original reader, which meant switching rendering mode left your font stuck where it was.
 - **Bionic reading, Remove extra spacing and volume-key scrolling now work in the native novel reader.** All three toggled but did nothing there, because only the WebView readers had anything behind them.
+- **Auto-scroll now works in the new shared novel reader, and Settings -> Novel reader has a Scroll speed slider for it.** Its bottom-bar button never appeared there and the setting scrolled nothing.
 
 **App**
 
@@ -307,6 +308,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 **Light novels**
 
+- **Novel auto-scroll now moves at the speed you set, rather than creeping along at a fraction of it in visible jerks.** The reader page's own stylesheet was animating every step of the scroll.
 - **On a merged novel, downloading from the All chip now downloads the chapters All is showing.** It fetched one source's chapters while you were looking at another's, so nothing on screen ever appeared as downloaded.
 - **A link inside a novel chapter now opens in your browser instead of taking over the reader.** A chapter could previously send the reader's own view to any page it liked.
 - **Opening a downloaded novel chapter no longer freezes the reader while it loads.** Chapters with pictures in them were the worst affected.

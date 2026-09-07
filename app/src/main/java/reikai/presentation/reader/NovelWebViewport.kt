@@ -56,6 +56,10 @@ class NovelWebViewport(
      *  happens when something in that block actually changed. */
     private var lastGeneralSettings: String? = null
 
+    /** The last auto-scroll state the host asked for, so a freshly built document can be given it. */
+    private var autoScrollRunning = false
+    private var autoScrollPixelsPerFrame = 0f
+
     // Bridge messages arrive on a WebView background thread, so UI-affecting callbacks marshal here.
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -81,7 +85,9 @@ class NovelWebViewport(
                 onSave = { percent -> onProgressSettled(percent) },
                 onProgress = { percent -> mainHandler.post { onProgressChanged(percent) } },
                 onTtsMessage = { _, _ -> },
-                onReaderReady = {},
+                // Auto-scroll is a call into the document, so a document that was not up yet dropped it.
+                // This is the point where it exists, and it fires again on every chapter.
+                onReaderReady = { mainHandler.post { pushAutoScroll() } },
                 // Swipe between chapters, which the page reports and the host used to drop, leaving
                 // the setting on the novel reader screen doing nothing.
                 onNavigate = { forward -> mainHandler.post { onStepChapter(forward) } },
@@ -192,6 +198,26 @@ class NovelWebViewport(
             append(" }")
         }
         webView.evaluateJavascript(script, null)
+    }
+
+    /**
+     * Auto-scroll, run by the injected scroller in the document. The values are held because the
+     * document is rebuilt on every chapter and starts with the scroller stopped, so they are pushed
+     * again from `onReaderReady` rather than only when the host changes them.
+     */
+    override fun setAutoScroll(running: Boolean, pixelsPerFrame: Float) {
+        autoScrollRunning = running
+        autoScrollPixelsPerFrame = pixelsPerFrame
+        pushAutoScroll()
+    }
+
+    private fun pushAutoScroll() {
+        val js = if (autoScrollRunning) {
+            "if (window.reikaiAutoScroll) reikaiAutoScroll.start($autoScrollPixelsPerFrame);"
+        } else {
+            "if (window.reikaiAutoScroll) reikaiAutoScroll.stop();"
+        }
+        webView.evaluateJavascript(js, null)
     }
 
     /** Smooth-scrolls the viewport by a signed fraction (positive = forward), reusing the WebView's own

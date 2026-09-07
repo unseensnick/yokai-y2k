@@ -80,6 +80,8 @@ fun ReaderAppBars(
     onClickKeepScreenOn: () -> Unit,
     onClickTextSize: (() -> Unit)?,
     onClickTheme: (() -> Unit)?,
+    autoScrollActive: Boolean,
+    onClickAutoScroll: (() -> Unit)?,
     // RK <--
 ) {
     val backgroundColor = readerChromeColor() // RK: shared scrim (see ReaderChrome)
@@ -191,6 +193,8 @@ fun ReaderAppBars(
                     onClickKeepScreenOn = onClickKeepScreenOn,
                     onClickTextSize = onClickTextSize,
                     onClickTheme = onClickTheme,
+                    autoScrollActive = autoScrollActive,
+                    onClickAutoScroll = onClickAutoScroll,
                     // RK <--
                 )
             }

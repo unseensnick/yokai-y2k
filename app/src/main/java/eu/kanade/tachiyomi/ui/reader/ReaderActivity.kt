@@ -634,6 +634,18 @@ class ReaderActivity : BaseActivity() {
             .drop(1)
             .onEach(viewport::applySettings)
             .launchIn(lifecycleScope)
+
+        // Auto-scroll pauses while the chrome is showing, which is the host's own state rather than a
+        // setting, so the decision is made once here and each renderer only starts and stops.
+        combine(
+            resolvedSettings,
+            viewModel.state.map { it.menuVisible },
+        ) { settings, menuVisible ->
+            (settings.autoScroll && !menuVisible) to settings.autoScrollSpeed
+        }
+            .distinctUntilChanged()
+            .onEach { (running, speed) -> viewport.setAutoScroll(running, speed) }
+            .launchIn(lifecycleScope)
     }
 
     /**
@@ -788,6 +800,7 @@ class ReaderActivity : BaseActivity() {
         val navigator by engine.navigator.collectAsState()
         val orientation by engine.orientation.collectAsState()
         val keepScreenOn by engine.keepScreenOn.collectAsState()
+        val autoScrollActive by engine.autoScrollEnabled.collectAsState()
 
         ReaderAppBars(
             visible = state.menuVisible,
@@ -856,6 +869,8 @@ class ReaderActivity : BaseActivity() {
             // off the bar for manga rather than opening a picker over nothing.
             onClickTextSize = engine.textSettings?.let { { engine.openDialog(ReaderDialog.TextSize(it)) } },
             onClickTheme = engine.textSettings?.let { { engine.openDialog(ReaderDialog.ThemeSelect(it)) } },
+            autoScrollActive = autoScrollActive,
+            onClickAutoScroll = engine.autoScroll?.let { auto -> { auto.toggle() } },
             // RK <--
         )
     }

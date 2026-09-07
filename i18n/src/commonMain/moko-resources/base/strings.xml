@@ -616,6 +616,7 @@
     <string name="auto_webtoon_snack">Reading webtoon style</string>
     <string name="pref_reader_bottom_buttons">Bottom bar buttons</string>
     <string name="pref_auto_scroll">Auto-scroll</string>
+    <string name="pref_auto_scroll_speed">Scroll speed</string>
     <string name="pref_bionic_reading">Bionic reading</string>
     <string name="pref_reader_text_size">Text size</string>
     <!-- RK: novel reader settings, surfaced as content-type sub-groups on the shared Reader screen -->

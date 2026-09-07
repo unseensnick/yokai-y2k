@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import reikai.domain.reader.ChapterProgress
@@ -88,6 +89,14 @@ class ReaderEngine(
 
     /** Typography, or null where this session's pages are images. */
     val textSettings: ReaderTextSettings? get() = provider.textSettings
+
+    /** Continuous scrolling, or null where this session offers none. */
+    val autoScroll: ReaderAutoScroll? get() = provider.autoScroll
+
+    /** Whether it is on, so the bar button lights. False for a session that has no such setting. */
+    val autoScrollEnabled: StateFlow<Boolean> =
+        (provider.autoScroll?.enabled ?: flowOf(false))
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun previousChapter() = stepChapter { provider.previousChapter() }
 

@@ -248,6 +248,38 @@ class ReaderEngineTest {
         installed.destroyed shouldBe true
         engine.viewport.value shouldBe null
     }
+
+    /**
+     * The manga shape. A session that offers no continuous scroll still has to answer the bar, and
+     * answering false is what leaves the button off rather than lit over nothing.
+     */
+    @Test
+    fun `a session without auto-scroll reports it off`() {
+        val engine = engine()
+
+        engine.autoScroll shouldBe null
+        engine.autoScrollEnabled.value shouldBe false
+    }
+
+    @Test
+    fun `auto-scroll follows the session that offers it`() {
+        val provider = FakeReaderProvider()
+        val auto = FakeAutoScroll()
+        provider.autoScrollSlot = auto
+        val engine = engine(provider)
+
+        auto.toggle()
+
+        engine.autoScrollEnabled.value shouldBe true
+    }
+}
+
+private class FakeAutoScroll : ReaderAutoScroll {
+    override val enabled = MutableStateFlow(false)
+
+    override fun toggle() {
+        enabled.value = !enabled.value
+    }
 }
 
 /**
@@ -264,6 +296,11 @@ private class FakeReaderProvider : ReaderProvider {
     override val keepScreenOn = MutableStateFlow(false)
 
     override val textSettings: ReaderTextSettings? = null
+
+    /** Set by the test that needs a session offering it; null is the manga shape. */
+    var autoScrollSlot: ReaderAutoScroll? = null
+
+    override val autoScroll: ReaderAutoScroll? get() = autoScrollSlot
 
     override val navigator = MutableStateFlow(ReaderNavigatorState())
 

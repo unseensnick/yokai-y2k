@@ -155,12 +155,19 @@ fun buildReaderHtml(
             tts.start(start || undefined);
           } catch (e) { tts.start(); }
         };
-        // Auto-scroll: a requestAnimationFrame loop that nudges the page down each frame.
+        // Auto-scroll: a requestAnimationFrame loop nudging the page down at a rate, rather than by a
+        // fixed step per frame, which ran at double speed on a 120Hz display. `instant` is
+        // load-bearing: index.css sets scroll-behavior:smooth on html, so a plain scrollBy starts an
+        // animation the next frame interrupts, which crept at a tenth of the speed and stuttered.
         window.reikaiAutoScroll = (function () {
-          var raf = null, speed = 0;
-          function step() { window.scrollBy(0, speed); raf = requestAnimationFrame(step); }
+          var raf = null, rate = 0, last = 0;
+          function step(now) {
+            if (last) { window.scrollBy({ top: rate * (now - last) / 1000, behavior: 'instant' }); }
+            last = now;
+            raf = requestAnimationFrame(step);
+          }
           return {
-            start: function (px) { speed = px; if (!raf) raf = requestAnimationFrame(step); },
+            start: function (px) { rate = px * 60; if (!raf) { last = 0; raf = requestAnimationFrame(step); } },
             stop: function () { if (raf) { cancelAnimationFrame(raf); raf = null; } },
           };
         })();

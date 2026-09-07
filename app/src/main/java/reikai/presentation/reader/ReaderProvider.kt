@@ -76,6 +76,9 @@ interface ReaderProvider {
     /** Typography, or null for a type whose pages are images rather than text. */
     val textSettings: ReaderTextSettings?
 
+    /** Continuous scrolling, or null for a type that offers no such setting. */
+    val autoScroll: ReaderAutoScroll?
+
     /**
      * The entry's own rotation flag, a [eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation]
      * `flagValue` where 0 means follow that content type's global default. Both types store one per

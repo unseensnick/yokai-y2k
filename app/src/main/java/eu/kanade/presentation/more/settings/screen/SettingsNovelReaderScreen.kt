@@ -194,6 +194,9 @@ object SettingsNovelReaderScreen : SearchableSettings {
     @Composable
     private fun getReadingGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
         val renderingMode by novelPreferences.readerRenderingMode().collectAsState()
+        val autoScrollSpeedPref = novelPreferences.readerAutoScrollSpeed()
+        val autoScrollSpeed by autoScrollSpeedPref.collectAsState()
+        val autoScroll by novelPreferences.readerAutoScroll().collectAsState()
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_reading),
@@ -248,6 +251,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     preference = novelPreferences.readerAutoScroll(),
                     title = stringResource(MR.strings.pref_auto_scroll),
                 ),
+                Preference.PreferenceItem.SliderPreference(
+                    value = (autoScrollSpeed * TENTHS).roundToInt(),
+                    valueRange = 2..40,
+                    title = stringResource(MR.strings.pref_auto_scroll_speed),
+                    valueString = "%.1fx".format(autoScrollSpeed),
+                    onValueChanged = { autoScrollSpeedPref.set(it / TENTHS) },
+                ).takeIf { autoScroll },
                 Preference.PreferenceItem.MultiSelectListPreference(
                     preference = novelPreferences.readerBottomButtons(),
                     entries = ReaderBottomButton.offeredIn(ReaderBottomButton.Scope.Novel)

@@ -169,6 +169,11 @@ class MangaReaderProvider(
     // act on. The buttons are absent rather than shown doing nothing.
     override val textSettings: ReaderTextSettings? = null
 
+    // Never offered for manga, so the button is absent rather than doing nothing. Whether an image
+    // viewer should scroll itself is a reading-mode question those viewers own, and it has not been
+    // asked; this stays the novel session's until it is.
+    override val autoScroll: ReaderAutoScroll? = null
+
     // Unresolved, because the picker's "use default" action has to be able to tell a series following
     // the default from one pinned to the same value the default happens to be.
     override val orientation: Flow<Int> = viewModel.state
