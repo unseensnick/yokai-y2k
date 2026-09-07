@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import mihon.app.di.appGraph
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
@@ -174,25 +175,39 @@ class NovelTextViewport(
         draw(chapter, settings, startFraction = chapter.progressPercent / 100f)
     }
 
+    /** Everything a view is drawn from. The rest of the object (auto-scroll, the rail, volume keys,
+     *  read-aloud) changes nothing on the page, and restyling for one of those copied the whole
+     *  chapter's text and re-measured every chunk on the main thread. */
+    private fun NovelReaderSettings.renderShape() = listOf(
+        fontSize, fontFamily, lineHeight, textAlign, textColor, backgroundColor, margins,
+        paragraphIndent, paragraphSpacing, bionicReading,
+    )
+
     override fun applySettings(settings: NovelReaderSettings) {
         val previous = this.settings
         this.settings = settings
-        recycler.setBackgroundColor(NovelTextStyle.parseColor(settings.backgroundColor, Color.WHITE))
+        if (previous != null && previous.renderShape() == settings.renderShape()) return
 
-        val chapter = loaded
-        if (chapter != null && previous != null &&
-            previous.paragraphShape().needsRedrawFor(settings.paragraphShape())
-        ) {
-            draw(chapter, settings, startFraction = percent() / 100f)
-            return
-        }
-        block?.let { NovelTextStyle.applyMargins(it.container, settings, context) }
-        block?.chunkViews?.forEach { view ->
-            // A precomputed layout was measured against the old paint, and the framework's own
-            // long-press drag path re-sets it without checking, which throws. Copying rather than
-            // flattening is what keeps the chapter's emphasis, links, images and paragraph spans.
-            view.text = SpannableStringBuilder(view.text)
-            NovelTextStyle.apply(view, settings, context)
+        scope.launch {
+            // A font just chosen may not be resolved yet, and resolving one touches storage.
+            context.appGraph.novelFontManager.warm(settings.fontFamily)
+            recycler.setBackgroundColor(NovelTextStyle.parseColor(settings.backgroundColor, Color.WHITE))
+
+            val chapter = loaded
+            if (chapter != null && previous != null &&
+                previous.paragraphShape().needsRedrawFor(settings.paragraphShape())
+            ) {
+                draw(chapter, settings, startFraction = percent() / 100f)
+                return@launch
+            }
+            block?.let { NovelTextStyle.applyMargins(it.container, settings, context) }
+            block?.chunkViews?.forEach { view ->
+                // A precomputed layout was measured against the old paint, and the framework's own
+                // long-press drag path re-sets it without checking, which throws. Copying rather than
+                // flattening is what keeps the chapter's emphasis, links, images and paragraph spans.
+                view.text = SpannableStringBuilder(view.text)
+                NovelTextStyle.apply(view, settings, context)
+            }
         }
     }
 
