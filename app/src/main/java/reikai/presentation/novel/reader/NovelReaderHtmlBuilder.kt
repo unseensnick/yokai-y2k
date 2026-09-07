@@ -3,6 +3,7 @@ package reikai.presentation.novel.reader
 import org.json.JSONArray
 import org.json.JSONObject
 import reikai.novel.font.fontDisplayName
+import reikai.novel.font.isGenericFont
 import reikai.novel.font.isSupportedFontFile
 
 /** Asset root for the bundled LNReader web layer (CSS/JS copied verbatim from lnreader-main). */
@@ -261,8 +262,9 @@ fun readerSettingsJson(settings: NovelReaderSettings): JSONObject = JSONObject()
     // drives the next-chapter button's side margins, which read the same variable.
     put("padding", settings.margins.left)
     put("fontFamily", webFontFamily(settings.fontFamily))
-    // `core.js` builds an assets URL from the family, which only a bundled face has.
-    put("customFont", isSupportedFontFile(settings.fontFamily))
+    // `core.js` builds an assets URL from the family, which only a bundled face has. A generic name
+    // is a CSS family the browser already knows, and a user font is declared in the head.
+    put("bundledFont", isBundledFont(settings.fontFamily))
     put("lineHeight", settings.lineHeight.toDouble())
     put("customCSS", "")
     put("customJS", "")
@@ -304,3 +306,7 @@ private fun customFontFace(family: String, url: String?): String {
  */
 private fun webFontFamily(family: String): String =
     if (isSupportedFontFile(family)) fontDisplayName(family) else family
+
+/** A face shipped in the assets folder, which is the only kind `core.js` can build a URL for. */
+private fun isBundledFont(family: String): Boolean =
+    family.isNotEmpty() && !isGenericFont(family) && !isSupportedFontFile(family)

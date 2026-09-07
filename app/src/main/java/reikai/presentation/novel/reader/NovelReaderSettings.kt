@@ -98,9 +98,18 @@ fun NovelReaderSettings.resolvedForSystemTheme(isDark: Boolean): NovelReaderSett
     return copy(backgroundColor = preset.background, textColor = preset.textColor)
 }
 
-/** A selectable reader font. [family] is empty for the source's original font and otherwise matches
- *  a bundled `assets/fonts/<family>.ttf` (the path the LNReader web layer loads). */
+/**
+ * A selectable reader font. [family] is empty for the source's own font, one of the generic CSS
+ * families, a bundled `assets/fonts/<family>.ttf`, or the file name of one the user added.
+ */
 data class ReaderFont(val family: String, val name: String)
+
+/** The three families Android guarantees, offered above the bundled faces. */
+val readerGenericFonts = listOf(
+    ReaderFont("sans-serif", "Sans serif"),
+    ReaderFont("serif", "Serif"),
+    ReaderFont("monospace", "Monospace"),
+)
 
 /** Bundled fonts from LNReader (Original + 9 families shipped under assets/fonts/). */
 val readerFonts = listOf(

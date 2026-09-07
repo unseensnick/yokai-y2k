@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.icerock.moko.resources.StringResource
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
 import dev.zacsweers.metro.Inject
@@ -16,21 +17,31 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import reikai.domain.novel.NovelPreferences
 import reikai.novel.font.FontError
+import reikai.novel.font.GoogleFont
 import reikai.novel.font.NovelFont
 import reikai.novel.font.NovelFontManager
 import tachiyomi.i18n.MR
+import java.io.File
 
 @Immutable
 data class NovelFontsState(
+    val selected: String = "",
     val fonts: List<NovelFont> = emptyList(),
     val busy: Boolean = false,
     val dialog: NovelFontDialog? = null,
-    /** The last failure, as a string resource the screen shows once and clears. */
-    val error: dev.icerock.moko.resources.StringResource? = null,
+    /** The last failure, shown once and then cleared. */
+    val error: StringResource? = null,
+    /** Where each added font can be read from, so the picker can draw its row in that face. */
+    val fontFiles: Map<String, File> = emptyMap(),
+    /** Every family Google Fonts offers, empty until the browse sheet asks for it. */
+    val catalogue: List<GoogleFont> = emptyList(),
+    val catalogueLoading: Boolean = false,
 )
 
 sealed interface NovelFontDialog {
-    data object Download : NovelFontDialog
+    /** The add sheet, offering the two ways a font can arrive. */
+    data object Add : NovelFontDialog
+    data object Browse : NovelFontDialog
     data class Delete(val font: NovelFont) : NovelFontDialog
 }
 
@@ -46,20 +57,42 @@ class NovelFontsViewModel(
     val state: StateFlow<NovelFontsState> = mutableState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            novelPreferences.readerFontFamily().changes().collect { family ->
+                mutableState.update { it.copy(selected = family) }
+            }
+        }
         refresh()
     }
 
-    fun showDialog(dialog: NovelFontDialog) = mutableState.update { it.copy(dialog = dialog) }
+    fun select(family: String) = novelPreferences.readerFontFamily().set(family)
+
+    fun showDialog(dialog: NovelFontDialog) {
+        mutableState.update { it.copy(dialog = dialog) }
+        if (dialog is NovelFontDialog.Browse && state.value.catalogue.isEmpty()) loadCatalogue()
+    }
+
+    /** Left empty on a failure rather than raised: the dialog still takes a name typed by hand. */
+    private fun loadCatalogue() {
+        mutableState.update { it.copy(catalogueLoading = true) }
+        viewModelScope.launch {
+            val families = fontManager.googleFontCatalogue()
+            mutableState.update { it.copy(catalogue = families, catalogueLoading = false) }
+        }
+    }
 
     fun dismissDialog() = mutableState.update { it.copy(dialog = null) }
 
     fun dismissError() = mutableState.update { it.copy(error = null) }
 
-    fun import(uri: Uri) = run { fontManager.import(uri) }
+    fun import(uri: Uri) {
+        dismissDialog()
+        add { fontManager.import(uri) }
+    }
 
     fun download(family: String) {
         dismissDialog()
-        if (family.isNotBlank()) run { fontManager.download(family.trim()) }
+        add { fontManager.download(family) }
     }
 
     fun delete(font: NovelFont) {
@@ -76,10 +109,12 @@ class NovelFontsViewModel(
         }
     }
 
-    private fun run(work: suspend () -> Result<NovelFont>) {
+    /** Selecting what just arrived, because adding a font is only ever a step towards reading in it. */
+    private fun add(work: suspend () -> Result<NovelFont>) {
         mutableState.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             val result = work()
+            result.getOrNull()?.let { select(it.fileName) }
             mutableState.update { it.copy(busy = false, error = result.exceptionOrNull()?.messageRes()) }
             refresh()
         }
@@ -88,7 +123,10 @@ class NovelFontsViewModel(
     private fun refresh() {
         viewModelScope.launch {
             val fonts = fontManager.installed()
-            mutableState.update { it.copy(fonts = fonts) }
+            val files = fonts.mapNotNull { font ->
+                fontManager.localFile(font.fileName)?.let { font.fileName to it }
+            }
+            mutableState.update { it.copy(fonts = fonts, fontFiles = files.toMap()) }
         }
     }
 }

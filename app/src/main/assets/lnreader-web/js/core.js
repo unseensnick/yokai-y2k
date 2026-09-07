@@ -84,10 +84,10 @@ window.reader = new (function () {
       '--readerSettings-fontFamily',
       settings.fontFamily,
     );
-    // RK: a font the user added is declared as a @font-face in the document head, so only a bundled
-    // family is loaded from the assets folder here. Without the flag the asset URL would be built
-    // from a name that has no asset behind it and 404 on every settings push.
-    if (settings.fontFamily && !settings.customFont) {
+    // RK: only a bundled face has a file in the assets folder. A generic name is a family the browser
+    // already knows and a font the user added is declared as a @font-face in the document head, so
+    // without the flag the asset URL would be built from a name with nothing behind it and 404.
+    if (settings.fontFamily && settings.bundledFont) {
       new FontFace(
         settings.fontFamily,
         'url("file:///android_asset/fonts/' + settings.fontFamily + '.ttf")',

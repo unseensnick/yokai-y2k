@@ -12,6 +12,8 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.awaitSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
@@ -37,6 +39,11 @@ class NovelFontManager(
     private val mirrorDir: File by lazy { File(context.filesDir, "fonts").apply { mkdirs() } }
 
     private val typefaces = HashMap<String, Typeface?>()
+
+    @Volatile
+    private var catalogue: List<GoogleFont>? = null
+
+    private val lenientJson = Json { ignoreUnknownKeys = true }
 
     suspend fun installed(): List<NovelFont> = withContext(Dispatchers.IO) {
         storageManager.getFontsDirectory()?.listFiles().orEmpty()
@@ -92,6 +99,25 @@ class NovelFontManager(
         write("${family.replace(' ', '_')}.$extension", bytes)
     }
 
+    /**
+     * Every family Google Fonts offers, so the picker can be searched rather than sending the reader
+     * to a browser for a name to type back. Fetched from the keyless metadata endpoint and held for
+     * the session, because it is a couple of megabytes and the answer does not change while reading.
+     */
+    suspend fun googleFontCatalogue(): List<GoogleFont> = withContext(Dispatchers.IO) {
+        catalogue?.let { return@withContext it }
+        val request = Request.Builder().url(CATALOGUE_URL).build()
+        val parsed = runCatching {
+            networkHelper.client.newCall(request).awaitSuccess().use { response ->
+                lenientJson.decodeFromString<GoogleFontCatalogue>(response.body.string())
+            }
+        }.getOrElse {
+            logcat(LogPriority.WARN, it) { "Could not read the Google Fonts catalogue" }
+            return@withContext emptyList()
+        }
+        parsed.familyMetadataList.also { catalogue = it }
+    }
+
     suspend fun delete(font: NovelFont): Boolean = withContext(Dispatchers.IO) {
         typefaces.remove(font.fileName)
         File(mirrorDir, font.fileName).delete()
@@ -111,6 +137,10 @@ class NovelFontManager(
 
     /** The `file://` URL the WebView renderers load the same font from, or null when its file has gone. */
     fun webUrl(fileName: String): String? = mirror(fileName)?.let { "file://${it.absolutePath}" }
+
+    /** The readable copy, for a caller that needs the file itself. Touches the disk, so off the main
+     *  thread: the picker asks for one per font to preview each row in the face it offers. */
+    suspend fun localFile(fileName: String): File? = withContext(Dispatchers.IO) { mirror(fileName) }
 
     /**
      * The app-private copy, made on first use. A picked folder is normally a SAF tree, which has no
@@ -145,8 +175,16 @@ class NovelFontManager(
 
     private companion object {
         const val CSS_URL = "https://fonts.googleapis.com/css2?family=%s:wght@400&display=swap"
+        const val CATALOGUE_URL = "https://fonts.google.com/metadata/fonts"
     }
 }
+
+/** One family Google Fonts offers. The category is what the picker shows under the name. */
+@Serializable
+data class GoogleFont(val family: String, val category: String)
+
+@Serializable
+private data class GoogleFontCatalogue(val familyMetadataList: List<GoogleFont>)
 
 /** Why an import or a download did not produce a usable font, so the screen can say which. */
 sealed class FontError : Exception() {

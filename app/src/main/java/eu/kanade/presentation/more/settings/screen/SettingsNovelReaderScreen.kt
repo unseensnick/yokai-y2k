@@ -3,7 +3,6 @@ package eu.kanade.presentation.more.settings.screen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -17,8 +16,9 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import mihon.app.di.appGraph
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRenderingMode
-import reikai.novel.font.NovelFont
+import reikai.novel.font.fontDisplayName
 import reikai.presentation.novel.reader.readerFonts
+import reikai.presentation.novel.reader.readerGenericFonts
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -68,31 +68,22 @@ object SettingsNovelReaderScreen : SearchableSettings {
         val lineSpacing by lineSpacingPref.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
-        // Re-read whenever the screen comes back, since the fonts screen is where they are added and
-        // removed and this list is what makes one selectable.
-        val customFonts by produceState(emptyList<NovelFont>()) {
-            value = context.appGraph.novelFontManager.installed()
+        val fontFamily by novelPreferences.readerFontFamily().collectAsState()
+        // Named from whichever list it came from, since the preference holds a key or a file name and
+        // neither reads as the font it selects.
+        val fontLabel = remember(fontFamily) {
+            (readerGenericFonts + readerFonts).firstOrNull { it.family == fontFamily }?.name
+                ?: fontDisplayName(fontFamily)
         }
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_text_display),
             preferenceItems = listOf(
-                Preference.PreferenceItem.ListPreference(
-                    preference = novelPreferences.readerFontFamily(),
-                    // The face names are proper nouns; only the empty "use the source's own" entry
-                    // is a label, so it is the one that comes from a string resource.
-                    entries = readerFonts.associate { font ->
-                        font.family to if (font.family.isEmpty()) {
-                            stringResource(MR.strings.pref_novel_font_original)
-                        } else {
-                            font.name
-                        }
-                    } + customFonts.associate { it.fileName to it.displayName },
-                    title = stringResource(MR.strings.pref_novel_font),
-                ),
+                // Its own screen rather than a list dialog: it also imports, downloads and removes
+                // fonts, and a second place to pick one would be a second answer to the same question.
                 Preference.PreferenceItem.TextPreference(
-                    title = stringResource(MR.strings.pref_novel_fonts),
-                    subtitle = stringResource(MR.strings.pref_novel_fonts_summary),
+                    title = stringResource(MR.strings.pref_novel_font),
+                    subtitle = fontLabel,
                     onClick = { navigator.push(NovelFontsScreen()) },
                 ),
                 Preference.PreferenceItem.SliderPreference(

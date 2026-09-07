@@ -47,3 +47,12 @@ fun isSfntHeader(header: ByteArray): Boolean {
     val magic = header.take(4).fold(0L) { acc, byte -> (acc shl 8) or (byte.toLong() and 0xFF) }
     return magic == 0x00010000L || magic == 0x74727565L || magic == 0x4F54544FL || magic == 0x74746366L
 }
+
+/**
+ * The three families every Android device has, stored as the CSS names the web renderers use
+ * directly. Android's own alias table folds Arial into sans-serif and Georgia and Times New Roman
+ * into serif, so those are not offered: they would be extra rows that draw the same three faces.
+ */
+val GENERIC_FONT_FAMILIES = listOf("sans-serif", "serif", "monospace")
+
+fun isGenericFont(family: String): Boolean = family in GENERIC_FONT_FAMILIES

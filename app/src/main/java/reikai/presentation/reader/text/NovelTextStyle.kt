@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.TextView
 import logcat.LogPriority
 import mihon.app.di.appGraph
+import reikai.novel.font.isGenericFont
 import reikai.novel.font.isSupportedFontFile
 import reikai.presentation.novel.reader.NovelReaderSettings
 import tachiyomi.core.common.util.system.logcat
@@ -86,12 +87,19 @@ object NovelTextStyle {
     }
 
     /**
-     * A bundled face is stored as its key and a font the user added as its file name, so the suffix
-     * is what tells them apart: a bundled key never carries one. Cached because a chapter builds one
-     * view per 6000 characters and each would otherwise re-read the file.
+     * Four kinds of family share one preference: empty for the source's own, a generic CSS name, a
+     * bundled asset key, or the file name of one the user added, which is the only one with a suffix.
+     * The asset cache is here because a chapter builds one view per 6000 characters.
      */
     private fun typefaceFor(context: Context, family: String): Typeface {
         if (family.isBlank()) return Typeface.DEFAULT
+        if (isGenericFont(family)) {
+            return when (family) {
+                "serif" -> Typeface.SERIF
+                "monospace" -> Typeface.MONOSPACE
+                else -> Typeface.SANS_SERIF
+            }
+        }
         if (isSupportedFontFile(family)) {
             return context.appGraph.novelFontManager.typeface(family) ?: Typeface.DEFAULT
         }
