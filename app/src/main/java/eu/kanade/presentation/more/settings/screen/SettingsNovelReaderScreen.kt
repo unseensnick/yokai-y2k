@@ -71,9 +71,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
         val fontFamily by novelPreferences.readerFontFamily().collectAsState()
         // Named from whichever list it came from, since the preference holds a key or a file name and
         // neither reads as the font it selects.
-        val fontLabel = remember(fontFamily) {
-            (readerGenericFonts + readerFonts).firstOrNull { it.family == fontFamily }?.name
-                ?: fontDisplayName(fontFamily)
+        val defaultFontLabel = stringResource(MR.strings.pref_novel_font_default)
+        val fontLabel = remember(fontFamily, defaultFontLabel) {
+            when {
+                fontFamily.isEmpty() -> defaultFontLabel
+                else -> (readerGenericFonts + readerFonts).firstOrNull { it.family == fontFamily }?.name
+                    ?: fontDisplayName(fontFamily)
+            }
         }
 
         return Preference.PreferenceGroup(

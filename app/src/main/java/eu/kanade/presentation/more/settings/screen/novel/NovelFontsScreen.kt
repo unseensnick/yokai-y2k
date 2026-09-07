@@ -125,8 +125,13 @@ class NovelFontsScreen : Screen() {
                 }
                 item { SectionHeader(stringResource(MR.strings.novel_font_section_built_in)) }
                 items(builtInFonts, key = { "b:${it.family}" }) { font ->
+                    val isDefault = font.family.isEmpty()
                     FontRow(
-                        label = font.name,
+                        // The one row whose name does not describe it: it sets no font at all, so it
+                        // is the only one that needs saying what happens instead.
+                        label = if (isDefault) stringResource(MR.strings.pref_novel_font_default) else font.name,
+                        subtitle = stringResource(MR.strings.pref_novel_font_default_summary)
+                            .takeIf { isDefault },
                         preview = assetPreview(context, font.family),
                         selected = state.selected == font.family,
                         onClick = { viewModel.select(font.family) },
@@ -231,6 +236,7 @@ private fun FontRow(
     preview: FontFamily?,
     selected: Boolean,
     onClick: () -> Unit,
+    subtitle: String? = null,
     onDelete: (() -> Unit)? = null,
 ) {
     Card(
@@ -250,12 +256,20 @@ private fun FontRow(
                 .padding(MaterialTheme.padding.medium),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontFamily = preview,
-                modifier = Modifier.weight(1f),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontFamily = preview,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             if (selected) {
                 Icon(
                     imageVector = MaterialSymbols.RoundedFilled.CheckCircle,

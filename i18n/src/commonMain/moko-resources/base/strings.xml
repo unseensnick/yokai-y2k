@@ -627,7 +627,8 @@
     <!-- RK: novel text display, applied by whichever renderer draws the chapter -->
     <string name="pref_category_text_display">Text display</string>
     <string name="pref_novel_font">Font</string>
-    <string name="pref_novel_font_original">Original</string>
+    <string name="pref_novel_font_default">Default</string>
+    <string name="pref_novel_font_default_summary">Your device's font, or the source's own</string>
     <string name="novel_font_section_built_in">Built in</string>
     <string name="novel_font_section_yours">Your fonts</string>
     <string name="novel_font_add">Add font</string>

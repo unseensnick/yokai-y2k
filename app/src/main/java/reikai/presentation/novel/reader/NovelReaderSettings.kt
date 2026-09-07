@@ -113,7 +113,7 @@ val readerGenericFonts = listOf(
 
 /** Bundled fonts from LNReader (Original + 9 families shipped under assets/fonts/). */
 val readerFonts = listOf(
-    ReaderFont("", "Original"),
+    ReaderFont("", "Default"),
     ReaderFont("lora", "Lora"),
     ReaderFont("nunito", "Nunito"),
     ReaderFont("noto-sans", "Noto Sans"),
