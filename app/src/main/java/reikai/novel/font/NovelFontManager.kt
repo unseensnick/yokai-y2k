@@ -19,6 +19,7 @@ import okhttp3.Request
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.storage.service.StorageManager
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The reader fonts the user added: what is installed, and importing, downloading and removing them.
@@ -38,7 +39,12 @@ class NovelFontManager(
 
     private val mirrorDir: File by lazy { File(context.filesDir, "fonts").apply { mkdirs() } }
 
-    private val typefaces = HashMap<String, Typeface?>()
+    /**
+     * Faces already resolved. Concurrent because a chapter renders from the main thread while an
+     * import or a delete runs on IO, and a miss is cached too: `getOrPut` re-runs its body for a null
+     * value, which turned a font whose file had gone into a storage lookup per chunk view.
+     */
+    private val typefaces = ConcurrentHashMap<String, CachedFace>()
 
     @Volatile
     private var catalogue: List<GoogleFont>? = null
@@ -46,13 +52,18 @@ class NovelFontManager(
     private val lenientJson = Json { ignoreUnknownKeys = true }
 
     suspend fun installed(): List<NovelFont> = withContext(Dispatchers.IO) {
-        storageManager.getFontsDirectory()?.listFiles().orEmpty()
+        val fonts = storageManager.getFontsDirectory()?.listFiles().orEmpty()
             .mapNotNull { file ->
                 val name = file.name ?: return@mapNotNull null
                 if (!file.isFile || !isSupportedFontFile(name)) return@mapNotNull null
                 NovelFont(name, fontDisplayName(name))
             }
             .sortedBy { it.displayName.lowercase() }
+        // A font removed with a file manager leaves its copy behind, and nothing else would ever go
+        // looking for it. Swept here because this is the one place that knows the full list.
+        val kept = fonts.mapTo(HashSet()) { it.fileName }
+        mirrorDir.listFiles()?.forEach { if (it.name !in kept) it.delete() }
+        fonts
     }
 
     /**
@@ -127,10 +138,22 @@ class NovelFontManager(
     /**
      * The face for a font the user added, or null when its file has gone. Cached because a chapter
      * builds one view per few thousand characters and each would otherwise re-read the file.
+     *
+     * Call [warm] from a coroutine first. Reaching an unresolved font here does the storage lookup and
+     * the copy on whatever thread is drawing, which for a first render is the main one.
      */
-    fun typeface(fileName: String): Typeface? = typefaces.getOrPut(fileName) {
-        val mirror = mirror(fileName) ?: return@getOrPut null
-        runCatching { Typeface.createFromFile(mirror) }
+    fun typeface(fileName: String): Typeface? =
+        typefaces.computeIfAbsent(fileName) { CachedFace(resolveTypeface(it)) }.typeface
+
+    /** Resolves [fileName] off the caller's thread, so the render that needs it finds it cached. */
+    suspend fun warm(fileName: String) {
+        if (!isSupportedFontFile(fileName) || typefaces.containsKey(fileName)) return
+        withContext(Dispatchers.IO) { typeface(fileName) }
+    }
+
+    private fun resolveTypeface(fileName: String): Typeface? {
+        val mirror = mirror(fileName) ?: return null
+        return runCatching { Typeface.createFromFile(mirror) }
             .onFailure { logcat(LogPriority.WARN, it) { "Unreadable reader font: $fileName" } }
             .getOrNull()
     }
@@ -148,8 +171,11 @@ class NovelFontManager(
      */
     private fun mirror(fileName: String): File? {
         val local = File(mirrorDir, fileName)
-        if (local.exists() && local.length() > 0) return local
-        val source = storageManager.getFontsDirectory()?.findFile(fileName) ?: return null
+        val source = storageManager.getFontsDirectory()?.findFile(fileName)
+            ?: return local.takeIf { it.exists() && it.length() > 0 }
+        // Size rather than timestamp, which a SAF provider need not report: replacing the file behind
+        // the reader with a different face otherwise kept drawing the old one forever.
+        if (local.exists() && local.length() > 0 && local.length() == source.length()) return local
         return runCatching {
             source.openInputStream().use { input -> local.outputStream().use(input::copyTo) }
             local
@@ -163,10 +189,13 @@ class NovelFontManager(
         val target = dir.createFile(fileName) ?: return Result.failure(FontError.NoStorage)
         return runCatching {
             target.openOutputStream().use { it.write(bytes) }
+            // What the provider actually called it, not what we asked for: it derives the extension
+            // from the MIME type, and a name that differs is one the reader could never resolve again.
+            val stored = target.name ?: fileName
             // The mirror and the cached face are stale the moment the file behind them changes.
-            File(mirrorDir, fileName).delete()
-            typefaces.remove(fileName)
-            NovelFont(fileName, fontDisplayName(fileName))
+            File(mirrorDir, stored).delete()
+            typefaces.remove(stored)
+            NovelFont(stored, fontDisplayName(stored))
         }.onFailure {
             target.delete()
             logcat(LogPriority.WARN, it) { "Could not save reader font: $fileName" }
@@ -193,3 +222,7 @@ sealed class FontError : Exception() {
     data object Offline : FontError()
     data object NoStorage : FontError()
 }
+
+/** A resolved face, or the fact that there is none. Wrapped so a miss can live in a map that refuses
+ *  null values and so it is not looked up again on every view a chapter builds. */
+private class CachedFace(val typeface: Typeface?)

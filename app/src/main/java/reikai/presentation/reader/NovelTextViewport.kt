@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import mihon.app.di.appGraph
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
 import reikai.presentation.novel.reader.NovelReaderSettings
@@ -166,6 +167,10 @@ class NovelTextViewport(
         settings: NovelReaderSettings,
     ) {
         loaded = chapter
+        // Resolving a user font copies it out of the user's storage folder on first use. Done here,
+        // where this is a coroutine, so the chunk views below find it cached rather than each doing
+        // that lookup on the main thread as it is built.
+        context.appGraph.novelFontManager.warm(settings.fontFamily)
         draw(chapter, settings, startFraction = chapter.progressPercent / 100f)
     }
 

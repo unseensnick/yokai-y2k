@@ -154,9 +154,11 @@ class NovelWebViewport(
         // thread, because a downloaded chapter has its images inlined and the string runs to megabytes.
         val colors = context.resolveReaderThemeColors()
         val statusBarPx = statusBarHeightPx()
-        // Resolved here rather than in the builder, because copying the file out of the user's
-        // storage folder is disk work and the document is built off the main thread below.
-        val fontUrl = context.appGraph.novelFontManager.webUrl(settings.fontFamily)
+        // Resolving a user font copies it out of the user's storage folder on first use, which is
+        // disk work over SAF, so it happens off the main thread with the document build rather than
+        // in front of it.
+        val fonts = context.appGraph.novelFontManager
+        val fontUrl = withContext(Dispatchers.IO) { fonts.webUrl(settings.fontFamily) }
         val html = withContext(Dispatchers.Default) {
             buildReaderHtml(
                 chapterHtml = chapter.html,
