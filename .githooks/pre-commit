@@ -110,16 +110,22 @@ if [ -f "$manifest" ]; then
   # is invisible to every future sync. Needs the refs clone; warn (never block) when it is absent.
   mihon_clone="../refs/mihon"
   if [ -d "$mihon_clone" ]; then
-    deleted=$(git diff --cached --name-only --diff-filter=D)
+    # Renames as well as deletions: a file moved off its upstream path is just as unwatched by the
+    # sync check as a deleted one. It needs --name-status, because --name-only reports a rename's
+    # destination and the path that stopped being covered is its source.
+    deleted=$(
+      git diff --cached --name-only --diff-filter=D
+      git diff --cached --name-status --diff-filter=R | awk '{ print $2 }'
+    )
     for path in $deleted; do
       git -C "$mihon_clone" cat-file -e "HEAD:$path" 2>/dev/null || continue
       if ! grep -qF "| $path |" "$manifest"; then
-        echo "off-path manifest: deleting '$path', which Mihon still has, without a manifest row."
+        echo "off-path manifest: '$path' leaves this tree while Mihon still has it, with no manifest row."
         echo "  Add a row (path | mihon | replacement) so the next sync is told when upstream changes it."
         fail=1
       fi
     done
-  elif [ -n "$(git diff --cached --name-only --diff-filter=D)" ]; then
+  elif [ -n "$(git diff --cached --name-only --diff-filter=DR)" ]; then
     echo "off-path manifest: no refs/mihon clone, skipping the undeclared-reroute check."
   fi
 fi

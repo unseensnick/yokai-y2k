@@ -15,9 +15,11 @@ silent and left no trace.
 - **`pre-commit`, every commit.** No manifested path may exist in the working tree, and every `Replacement`
   must exist. A resurrected file means two implementations of one surface; a replacement that does not exist
   means the row protects nothing.
-- **`pre-commit`, when `refs/mihon` is present.** Staging the deletion of a file Mihon still has requires a
-  manifest row for it in the same commit, which closes the "a new reroute that skips the manifest is
-  invisible" hole. Without the clone it warns instead of blocking, so a fresh clone is never stuck.
+- **`pre-commit`, when `refs/mihon` is present.** Staging the deletion **or the rename** of a file Mihon
+  still has requires a manifest row for it in the same commit, which closes the "a new reroute that skips
+  the manifest is invisible" hole. Renames count because git records one as `R`, not `D`, and a file moved
+  off its upstream path is just as unwatched as a deleted one. Without the clone it warns instead of
+  blocking, so a fresh clone is never stuck.
 - **`commit-msg`, on sync commits.** `scripts/off-path-check.ps1` writes `.git/off-path-checked` recording the
   upstream HEAD it ran against, and a `chore: sync Mihon...` subject is rejected unless that stamp exists and
   matches the current `refs/mihon` HEAD. Running the check stops being optional.
@@ -99,6 +101,7 @@ The path is relative to the repo root and matches the `refs/` clone layout. `Ups
 | app/src/main/java/mihon/app/di/MihonViewModelFactory.kt | mihon | mihon/app/di/ReikaiViewModelFactory.kt |
 | app/src/main/java/eu/kanade/tachiyomi/util/chapter/ChapterRemoveDuplicates.kt | mihon | reikai/domain/reader/DuplicateChapters.kt |
 | app/src/main/java/eu/kanade/presentation/reader/OrientationSelectDialog.kt | mihon | reikai/presentation/reader/ReaderOrientationDialog.kt |
+| app/src/main/java/eu/kanade/presentation/more/settings/screen/SettingsReaderScreen.kt | mihon | eu/kanade/presentation/more/settings/screen/SettingsMangaReaderScreen.kt |
 
 **A row tracks the file's CURRENT upstream path, not the name Reikai deleted.** When upstream renames a
 manifested file, repoint the row at the new path, because the check `cat-file`s the path at upstream HEAD and,
@@ -129,5 +132,13 @@ The three category interactors each scoped themselves to the manga-visible rows.
 The three browse-grid containers went when one catalogue body took over both per-source screens. Only the containers left: `EntryBrowseGridCell` was already the shared leaf all three delegated to, and `BrowseSourceEHentaiList` stays live as the adult-source layout, re-typed to the neutral row. `BrowseSourceScreen.kt` in `eu.kanade.presentation.browse` is manifested rather than left partially collapsed: its `MissingSourceScreen` remainder went with the shared catalogue screen, which renders that state off the neutral one. `BrowseSourceToolbar` went the same way: it was already neutral apart from taking a manga `Source` to read three booleans off, so it moved rather than being replaced.
 
 The two sources-filter rows went when one screen took over both halves. The Browse filter action could only reach the manga screen from the All and Manga chips, so a plugin could not be enabled, disabled or language-filtered from the chip most readers are on; the shared screen carries a Manga / Novels chip and renders each half from its own ViewModel. Only the chrome is shared: manga still writes Mihon's enabled-language set and novels their own deny-list, so neither preference model moved. `SourcesFilterScreen.kt` in `eu.kanade.presentation.browse` is manifested rather than left partially collapsed, because its content, header and item composables moved into the shared screen along with the chrome that called them. Reikai's own `NovelSourcesFilterScreen` was absorbed the same way and needs no row; `NovelSourcesFilterViewModel` stays live behind the novel half.
+
+`SettingsMangaReaderScreen` is the second rename-rather-than-takeover row, and it is Reikai's own
+rename rather than a debrand: the settings restructure split the reader screen into a manga one and a
+novel one, and the manga half is upstream's file under a new name, still in upstream's package and
+still hand-merged on every sync. Without a row, `SettingsReaderScreen.kt` is a path the check never
+looks at, so an upstream change to the reader settings would land nowhere and nothing would say so.
+It was missed at the time because git records a rename as `R` while the `pre-commit` guard only read
+`D`; the guard reads both now, so the next one cannot arrive unrecorded the same way.
 
 `MihonViewModelFactory` is the manifest's first debrand rename rather than a surface takeover. `ReikaiViewModelFactory` is that file with the class renamed and a KDoc added, nothing else, so its Replacement sits under `mihon/app/di/` rather than `reikai/`: it kept upstream's package. It reached the manifest by a sweep rather than by the hook, and could only ever have arrived that way. Upstream added it in mihon `b2015d1ef` (`mihonapp/mihon#3608`), which is inside the synced base, but the Mihon-base seed brought in the renamed copy instead, so the file never existed here and no deletion was ever staged for `pre-commit` to see. **A file that arrives absent is invisible to that check by construction**, so a periodic diff of the whole upstream file set against this tree is the only thing that finds one.
