@@ -7,7 +7,11 @@ import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.html.HtmlGenerator
 import org.intellij.markdown.parser.MarkdownParser
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Comment
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.Node
 import org.jsoup.parser.Parser
+import org.jsoup.select.NodeVisitor
 import tachiyomi.core.common.util.system.logcat
 
 object NovelHtmlUtils {
@@ -46,8 +50,17 @@ object NovelHtmlUtils {
     private val styleTagRegex =
         Regex("<style[^>]*>.*?</style>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     private val styleSelfClosingRegex = Regex("<style[^>]*/>", RegexOption.IGNORE_CASE)
-    private val linkStylesheetRegex1 = Regex("<link[^>]*rel[^>]*stylesheet[^>]*>", RegexOption.IGNORE_CASE)
-    private val linkStylesheetRegex2 = Regex("<link[^>]*stylesheet[^>]*rel[^>]*>", RegexOption.IGNORE_CASE)
+
+    /** Elements that fetch or run something of their own, none of which a chapter needs. `base`
+     *  rewrites every relative URL in the document. `svg` and `math` are foreign content, which does
+     *  not always survive a serialize-and-reparse unchanged, and that is what a mutation bypass is. */
+    private const val ALWAYS_DROPPED =
+        "noscript, iframe, frame, frameset, object, embed, applet, base, meta, form, svg, math"
+
+    private const val MEDIA_ELEMENTS = "img, image, picture, video, audio, source, track"
+
+    /** Attributes a browser resolves as a URL, and so will run as code given a `javascript:` one. */
+    private val URL_ATTRIBUTES = listOf("href", "src", "srcset", "action", "formaction", "data", "poster")
 
     private val noscriptTagRegex =
         Regex("<noscript[^>]*>.*?</noscript>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
@@ -238,10 +251,10 @@ object NovelHtmlUtils {
     }
 
     /**
-     * Drops markup a reader should not render: scripts, styles the user did not ask to keep,
-     * `noscript` blocks and comments. Regex-based, so it is a rendering cleanup and never a security
-     * boundary: an end tag with whitespace, comment splicing and every attribute get past it. Do not
-     * treat the result as safe markup (docs/dev/plans/content-layer-reader-surface.md has the list).
+     * Drops markup a reader should not render. The two targets need different guarantees, so they
+     * take different paths: the WebView runs scripts with the app's cookie jar and a bridge bound, so
+     * its markup is parsed and pruned as a tree, while `Html.fromHtml` executes nothing and only
+     * needs the tags it would otherwise print stripped out of sight.
      */
     fun sanitizeForRender(
         content: String,
@@ -249,39 +262,95 @@ object NovelHtmlUtils {
         keepEmbeddedCss: Boolean,
         keepEmbeddedJs: Boolean,
         blockMedia: Boolean,
+    ): String = when (target) {
+        RenderTarget.WEB_VIEW -> sanitizeForWebView(content, keepEmbeddedCss, keepEmbeddedJs, blockMedia)
+        RenderTarget.TEXT_VIEW -> sanitizeForTextView(content, blockMedia)
+    }
+
+    /**
+     * Prunes the parsed tree, because a regex cannot be a boundary here: `</script >`, a comment
+     * spliced through a tag name and every attribute got past the pattern-matching version this
+     * replaces. Falls back to that version only when the parser itself throws, which leaves a
+     * chapter rendering rather than blank.
+     */
+    private fun sanitizeForWebView(
+        content: String,
+        keepEmbeddedCss: Boolean,
+        keepEmbeddedJs: Boolean,
+        blockMedia: Boolean,
     ): String {
-        var result = content
-
-        val stripJs = target == RenderTarget.TEXT_VIEW || !keepEmbeddedJs
-        val stripCss = target == RenderTarget.TEXT_VIEW || !keepEmbeddedCss
-
-        if (stripJs) {
-            result = result.replace(scriptTagRegex, "")
-            result = result.replace(scriptSelfClosingRegex, "")
+        val doc = try {
+            Jsoup.parseBodyFragment(content)
+        } catch (e: Exception) {
+            logcat(LogPriority.WARN, e) { "Falling back to pattern sanitizing for a chapter" }
+            return sanitizeForTextView(content, blockMedia)
         }
+        // Pretty-printing reflows the markup, which collapses the line breaks inside a plain-text
+        // paragraph. Pruning the tree must not rewrite what is left of it.
+        doc.outputSettings().prettyPrint(false)
 
-        if (stripCss) {
-            result = result.replace(styleTagRegex, "")
-            result = result.replace(styleSelfClosingRegex, "")
-            if (target == RenderTarget.WEB_VIEW) {
-                result = result.replace(linkStylesheetRegex1, "")
-                result = result.replace(linkStylesheetRegex2, "")
-                try {
-                    val doc = Jsoup.parseBodyFragment(result)
-                    // Pretty-printing reflows the markup, which collapses the line breaks inside a
-                    // plain-text paragraph. Stripping an attribute must not rewrite the document.
-                    doc.outputSettings().prettyPrint(false)
-                    doc.body().select("*").removeAttr("style")
-                    result = doc.body().html()
-                } catch (_: Exception) {
-                    // Keep the partially sanitized result if parsing fails.
+        doc.select(ALWAYS_DROPPED).remove()
+        if (!keepEmbeddedJs) {
+            doc.select("script").remove()
+            doc.select("*").forEach(::stripScriptingAttributes)
+        }
+        if (!keepEmbeddedCss) {
+            doc.select("style, link[rel=stylesheet]").remove()
+            doc.select("[style]").removeAttr("style")
+        }
+        if (blockMedia) doc.select(MEDIA_ELEMENTS).remove()
+        dropComments(doc.body())
+
+        // A comment the source escaped is text rather than markup, so the parser leaves it in place
+        // and it would start showing mid-paragraph where it used to be dropped.
+        return doc.body().html().replace(encodedCommentRegex, "")
+    }
+
+    /** Removes the inline scripting an element can carry: an event handler, or a URL that is code. */
+    private fun stripScriptingAttributes(element: Element) {
+        element.attributes()
+            .map { it.key }
+            .filter { it.startsWith("on", ignoreCase = true) }
+            .forEach(element::removeAttr)
+        URL_ATTRIBUTES
+            .filter { element.hasAttr(it) && isScriptUrl(element.attr(it)) }
+            .forEach(element::removeAttr)
+    }
+
+    /** Leading whitespace and control characters are stripped first, since a browser ignores them
+     *  when it resolves the scheme and `javascript:` would otherwise read as a relative path. */
+    private fun isScriptUrl(url: String): Boolean =
+        url.filterNot { it.isWhitespace() || it.code < 0x20 }
+            .startsWith("javascript:", ignoreCase = true)
+
+    private fun dropComments(root: Element) {
+        val comments = mutableListOf<Comment>()
+        root.traverse(
+            object : NodeVisitor {
+                override fun head(node: Node, depth: Int) {
+                    if (node is Comment) comments.add(node)
                 }
-            }
-        }
 
-        result = result.replace(noscriptTagRegex, "")
-        result = result.replace(htmlCommentRegex, "")
-        result = result.replace(encodedCommentRegex, "")
+                override fun tail(node: Node, depth: Int) = Unit
+            },
+        )
+        comments.forEach(Comment::remove)
+    }
+
+    /**
+     * A TextView prints what it cannot render, so scripts and styles always go whatever the user
+     * asked for. Pattern-based, and safe to be: `Html.fromHtml` has no script engine and no CSS, so
+     * what gets past this is text on the page rather than code in a browser.
+     */
+    private fun sanitizeForTextView(content: String, blockMedia: Boolean): String {
+        var result = content
+            .replace(scriptTagRegex, "")
+            .replace(scriptSelfClosingRegex, "")
+            .replace(styleTagRegex, "")
+            .replace(styleSelfClosingRegex, "")
+            .replace(noscriptTagRegex, "")
+            .replace(htmlCommentRegex, "")
+            .replace(encodedCommentRegex, "")
 
         if (blockMedia) result = stripMediaTags(result)
         return result

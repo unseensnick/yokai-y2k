@@ -90,11 +90,11 @@ fun buildReaderHtml(
         ${customFontFace(settings.fontFamily, customFontUrl)}
         :root {
           --StatusBar-currentHeight: ${statusBarHeightPx}px;
-          --readerSettings-theme: ${settings.backgroundColor};
+          --readerSettings-theme: ${cssBackgroundColor(settings.backgroundColor)};
           --readerSettings-padding: ${settings.margins.left}px;
           --readerSettings-textSize: ${settings.fontSize}px;
-          --readerSettings-textColor: ${settings.textColor};
-          --readerSettings-textAlign: ${settings.textAlign};
+          --readerSettings-textColor: ${cssTextColor(settings.textColor)};
+          --readerSettings-textAlign: ${cssTextAlign(settings.textAlign)};
           --readerSettings-lineHeight: ${settings.lineHeight};
           --readerSettings-fontFamily: ${webFontFamily(settings.fontFamily)};
           --readerSettings-paragraphIndent: ${settings.paragraphIndent}em;
@@ -296,6 +296,8 @@ private fun escapeHtml(text: String): String = text
  */
 private fun customFontFace(family: String, url: String?): String {
     if (url == null || !isSupportedFontFile(family)) return ""
+    // Dropping the declaration loses the face; letting it through loses the whole style block.
+    if (!isSafeInCssUrl(url)) return ""
     return "@font-face { font-family: '${webFontFamily(family)}'; src: url('$url'); }"
 }
 
@@ -305,7 +307,7 @@ private fun customFontFace(family: String, url: String?): String {
  * with the face declared and never referenced. The readable name has no dot in it.
  */
 private fun webFontFamily(family: String): String =
-    if (isSupportedFontFile(family)) fontDisplayName(family) else family
+    cssFontFamily(if (isSupportedFontFile(family)) fontDisplayName(family) else family)
 
 /** A face shipped in the assets folder, which is the only kind `core.js` can build a URL for. */
 private fun isBundledFont(family: String): Boolean =
