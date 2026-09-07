@@ -648,8 +648,9 @@
     <string name="pref_auto_split_text_summary">Add paragraph breaks to chapters that arrive as one unbroken block</string>
     <string name="pref_auto_split_word_count">Words before a split</string>
     <string name="pref_novel_rendering_mode">Rendering mode</string>
-    <string name="pref_novel_rendering_mode_legacy">Original reader</string>
-    <string name="pref_novel_rendering_mode_webview">New reader (in development)</string>
+    <string name="pref_novel_rendering_mode_legacy">Legacy</string>
+    <!-- Do not translate "WebView" -->
+    <string name="pref_novel_rendering_mode_webview">WebView (in development)</string>
     <string name="pref_novel_rendering_mode_native">Native text (in development)</string>
     <string name="pref_novel_text_selectable">Select text by long press</string>
     <string name="pref_novel_text_selectable_summary">Long press to select text, which stops links responding to taps</string>
