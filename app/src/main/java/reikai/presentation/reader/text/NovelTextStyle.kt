@@ -29,6 +29,9 @@ object NovelTextStyle {
 
     fun apply(view: TextView, settings: NovelReaderSettings, context: Context) {
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, settings.fontSize.toFloat())
+        // Off, as tsundoku has it, so the text sits where the WebView puts it. It also lands at every
+        // chunk seam here rather than once per chapter, since a chapter is split across views.
+        view.includeFontPadding = false
         view.typeface = typefaceFor(context, settings.fontFamily)
         applyLineSpacing(view, settings.lineHeight)
         val density = context.resources.displayMetrics.density
