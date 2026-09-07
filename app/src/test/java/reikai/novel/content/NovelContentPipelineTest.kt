@@ -15,6 +15,7 @@ import reikai.novel.source.NovelChapterTextLoader
 import reikai.novel.source.NovelSource
 import reikai.novel.source.NovelSourceManager
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.core.common.preference.InMemoryPreferenceStore.InMemoryPreference
 
 /**
  * The pipeline's own guarantees. The plain-text case is the one that matters most: a chapter whose
@@ -31,6 +32,38 @@ class NovelContentPipelineTest {
         chapterName = "Chapter 1",
         target = RenderTarget.WEB_VIEW,
     )
+
+    /**
+     * Seeded through the constructor: `InMemoryPreferenceStore.set` is invisible to the next `get`, so
+     * a stage switched on with `set` would look off and the test would pass against a deleted stage.
+     */
+    private fun pipelineWith(vararg seeded: InMemoryPreference<*>) =
+        NovelContentPipeline(NovelPreferences(InMemoryPreferenceStore(seeded.asSequence())))
+
+    @Test
+    fun `a find-and-replace rule reaches the chapter`() = runTest {
+        val rule = """[{"title":"t","pattern":"badger","replacement":"otter","isRegex":false}]"""
+        val seeded = pipelineWith(InMemoryPreference("ln_reader_regex_replacements", rule, "[]"))
+
+        val processed = seeded.process("<p>a badger appears</p>", config("/book/ch1.html"))
+
+        processed.text shouldContain "otter"
+        processed.text shouldNotContain "badger"
+    }
+
+    @Test
+    fun `auto-split breaks a wall of text into paragraphs`() = runTest {
+        val seeded = pipelineWith(
+            InMemoryPreference("ln_reader_auto_split_text", true, false),
+            InMemoryPreference("ln_reader_auto_split_word_count", 20, 50),
+        )
+        val wall = (1..6).joinToString(" ") { List(20) { "word" }.joinToString(" ") + "." }
+
+        val processed = seeded.process("<p>$wall</p>", config("/book/ch1.html"))
+
+        // Breaks rather than paragraph tags, so a split stays valid inside a div-based chapter.
+        processed.text shouldContain "<br><br>"
+    }
 
     @Test
     fun `a plain-text chapter is reported as plain text so a sink knows to escape it`() = runTest {
