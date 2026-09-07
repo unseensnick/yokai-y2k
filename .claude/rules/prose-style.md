@@ -83,6 +83,12 @@ Two sentences are right when the second one is a warning the user cannot recover
 they cannot guess: a destructive sync, a wrong address that silently stops tracking, a second sign-in.
 Mihon keeps those at that length too. Nothing else earns one.
 
+**Never write "both" in a Reikai string.** In an app serving manga and novels it reads as the content
+types first, so "One Recents tab for both" looks like a manga-plus-novels switch when it means Updates
+plus History. Name the two things, or lean on the title above it ("Replaces the two tabs with a single
+Recents tab" under "Combine Updates and History"). The same care goes for a bare "these" or "them"
+whose referent is a screen away.
+
 Strings ported from Komikku or TachiyomiSY keep their upstream shape like any other inherited code,
 so measure ours against Mihon before calling a string ours to fix. Translations carry none of
 Reikai's own keys, so rewriting a base string costs no translation churn.

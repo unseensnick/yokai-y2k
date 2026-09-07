@@ -297,7 +297,7 @@
     <string name="recents_mode_grouped">Grouped</string>
     <string name="recents_mode_feed">Feed</string>
     <string name="pref_combined_recents_tab">Combine Updates and History</string>
-    <string name="pref_combined_recents_tab_summary">One Recents tab for both, with a combined feed</string>
+    <string name="pref_combined_recents_tab_summary">Replaces the two tabs with a single Recents tab</string>
     <!-- RK: refresh feedback on the combined All chip (both libraries update at once) -->
     <string name="updating_both_libraries">Updating both libraries</string>
     <!-- RK: light-novel browse (P5 S3a) -->
