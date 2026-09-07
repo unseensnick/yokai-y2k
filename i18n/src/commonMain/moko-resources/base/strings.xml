@@ -642,7 +642,7 @@
     <string name="novel_font_error_download">Could not download that font</string>
     <string name="novel_font_error_storage">Could not write to your storage location</string>
     <string name="novel_font_error_read">Could not read that file</string>
-    <string name="information_empty_novel_fonts">Nothing added yet. Use Add font below.</string>
+    <string name="information_empty_novel_fonts">Fonts you import or download appear here.</string>
     <string name="pref_novel_line_spacing">Line spacing</string>
     <string name="pref_novel_text_align">Alignment</string>
     <string name="pref_novel_regex_rules">Find and replace</string>
