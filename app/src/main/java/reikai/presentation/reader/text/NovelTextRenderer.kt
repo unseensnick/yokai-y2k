@@ -40,6 +40,13 @@ class NovelTextRenderer(
         paragraphIndent: Float,
         selectable: Boolean,
         bionic: Boolean,
+        /**
+         * The width an image is bounded to, in pixels: the column the text is drawn in, not the
+         * display. The caller supplies it because no chunk view exists yet when a render starts, so
+         * measuring one here silently fell back to the display width and clipped every image by the
+         * side margins.
+         */
+        contentWidth: Int,
         /** The chapter's own site, sent as the Referer for an image some hosts would otherwise refuse. */
         refererUrl: String?,
         onTextSet: () -> Unit,
@@ -49,12 +56,6 @@ class NovelTextRenderer(
         val token = ++block.renderToken
 
         scope.launch {
-            // Measured against the column the text is drawn in, so an image is decoded at the size it
-            // is shown at rather than full resolution.
-            val contentWidth = block.chunkViews.firstOrNull()
-                ?.let { it.width - it.paddingLeft - it.paddingRight }
-                ?.takeIf { it > 0 }
-                ?: context.resources.displayMetrics.widthPixels
             val imageGetter = NovelImageGetter(
                 context = context,
                 scope = scope,

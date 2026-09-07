@@ -231,6 +231,15 @@ class NovelTextViewport(
         }
     }
 
+    /** The text column: what is left of the reader once the page's side margins are taken off. The
+     *  recycler answers for its own width once laid out, and the display stands in before that. */
+    private fun columnWidthPx(settings: NovelReaderSettings): Int {
+        val density = context.resources.displayMetrics.density
+        val sides = ((settings.margins.left + settings.margins.right) * density).toInt()
+        val available = recycler.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
+        return (available - sides).coerceAtLeast(1)
+    }
+
     /**
      * Indent and spacing are spans measured in pixels when the text is built, so neither they nor a
      * font size they are a multiple of can be restyled in place. Redrawing from [startFraction] is
@@ -257,6 +266,7 @@ class NovelTextViewport(
             paragraphIndent = settings.paragraphIndent,
             selectable = textSelectable,
             bionic = settings.bionicReading,
+            contentWidth = columnWidthPx(settings),
             refererUrl = chapter.baseUrl?.let { it.trimEnd('/') + "/" },
             onTextSet = ::applyPendingProgress,
         )
