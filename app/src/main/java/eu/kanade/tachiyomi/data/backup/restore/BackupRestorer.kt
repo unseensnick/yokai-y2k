@@ -142,10 +142,10 @@ class BackupRestorer(
         coroutineScope {
             // RK: categories must finish restoring BEFORE manga + app-settings, both of which map to
             // live categories by name (a manga's category assignments in MangaRestorer.restoreCategories;
-            // the default-category pref in PreferenceRestorer). Upstream launches all of these
-            // concurrently, so a manga restored before its categories exist loses them and lands in the
-            // Default category (a long-standing Tachiyomi-lineage race: a random count slips through each
-            // run). Awaiting the categories job first fixes it; everything below stays parallel.
+            // the default-category pref in PreferenceRestorer). Otherwise an entry restored before its
+            // categories exist loses them and lands in Default. Upstream fixes the same race by handing
+            // the categories job to those two restorers to await; we await it once here instead, because
+            // the novel stream below needs the same wait and would have to be threaded separately.
             if (options.categories) {
                 restoreCategories(summary.backupCategories).join()
             }

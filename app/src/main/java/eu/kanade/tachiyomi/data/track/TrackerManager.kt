@@ -25,11 +25,6 @@ import kotlinx.coroutines.flow.combine
 class TrackerManager {
 
     companion object {
-        const val ANILIST = 2L
-        const val KITSU = 3L
-        const val KAVITA = 8L
-        const val MANGABAKA = 11L
-
         // RK: MangaDex MDList tracker (id matches Komikku; ids persist with tracks, never change it)
         const val MDLIST = 60L
 
@@ -40,16 +35,16 @@ class TrackerManager {
     }
 
     val myAnimeList = MyAnimeList(1L)
-    val aniList = Anilist(ANILIST)
-    val kitsu = Kitsu(KITSU)
+    val aniList = Anilist(2L)
+    val kitsu = Kitsu(3L)
     val shikimori = Shikimori(4L)
     val bangumi = Bangumi(5L)
     val komga = Komga(6L)
     val mangaUpdates = MangaUpdates(7L)
-    val kavita = Kavita(KAVITA)
+    val kavita = Kavita(8L)
     val suwayomi = Suwayomi(9L)
     val hikka = Hikka(10L)
-    val mangaBaka = MangaBaka(MANGABAKA)
+    val mangaBaka = MangaBaka(11L)
 
     // RK: RanobeDB light-novel tracker (paste-a-token login, binds to a series)
     val ranobeDb = RanobeDb(RANOBEDB)

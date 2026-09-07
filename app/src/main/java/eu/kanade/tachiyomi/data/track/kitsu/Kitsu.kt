@@ -97,9 +97,6 @@ class Kitsu(id: Long) : BaseTracker(id, "Kitsu"), DeletableTracker {
     override fun getCompletionStatus(): Long = COMPLETED
 
     private fun getCurrentRatingSystem(): RatingSystem {
-        // RK: lower-cased because GraphQL reports the rating system as SIMPLE / REGULAR / ADVANCED
-        // while these keys are lower case. Upstream lower-cases only the login guard, not the value
-        // it stores, so a session that logged in since that change holds an upper-case one here.
         val ratingSystem = scorePreference.get().lowercase()
         return ratingSystems[ratingSystem] ?: throw Exception("Unknown score type $ratingSystem")
     }
@@ -207,8 +204,8 @@ class Kitsu(id: Long) : BaseTracker(id, "Kitsu"), DeletableTracker {
         interceptor.newAuth(token)
         val currentUser = api.getCurrentUser()
 
-        val ratingSystem = currentUser.ratingSystem.lowercase() // RK: store it in the key casing
-        if (ratingSystem in listOf(RATING_SIMPLE, RATING_REGULAR, RATING_ADVANCED)) {
+        val ratingSystem = currentUser.ratingSystem
+        if (ratingSystem.lowercase() in listOf(RATING_SIMPLE, RATING_REGULAR, RATING_ADVANCED)) {
             scorePreference.set(ratingSystem)
         } else {
             logcat(LogPriority.ERROR) { "Unsupported Kitsu score type: $ratingSystem" }

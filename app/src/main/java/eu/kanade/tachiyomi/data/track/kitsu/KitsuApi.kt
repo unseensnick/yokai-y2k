@@ -41,7 +41,7 @@ import kotlin.time.Instant
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 class KitsuApi(
-    private val trackId: Long,
+    private val trackerId: Long,
     private val client: OkHttpClient,
     interceptor: KitsuInterceptor,
 ) {
@@ -304,7 +304,7 @@ class KitsuApi(
                     // enum in upper case where the old REST API returned it lower, so compare loosely.
                     .filter { it.isNovel() == novel }
                     // RK <--
-                    .map { it.toTrackSearch(trackId) }
+                    .map { it.toTrackSearch(trackerId) }
             }
         }
     }
@@ -346,7 +346,7 @@ class KitsuApi(
                     .awaitSuccess()
                     .parseAs<KitsuSearchByIdWithLibraryResult>()
                     .data.findMangaById
-                    ?.toTrackSearch(trackId)
+                    ?.toTrackSearch(trackerId)
             }
         }
     }
@@ -449,7 +449,7 @@ class KitsuApi(
                 }
 
                 // RK: the same subtype split the title search filters on.
-                kitsuManga?.takeIf { it.isNovel() == novel }?.toTrackSearch(trackId)
+                kitsuManga?.takeIf { it.isNovel() == novel }?.toTrackSearch(trackerId)
             }
         }
     }

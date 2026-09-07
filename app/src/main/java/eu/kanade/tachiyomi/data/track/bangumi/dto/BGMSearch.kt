@@ -29,7 +29,7 @@ data class BGMSubject(
     // RK: only the subject-detail endpoint returns infobox; default keeps search parsing unaffected.
     val infobox: List<Infobox> = emptyList(),
 ) {
-    fun toTrackSearch(trackId: Long): TrackSearch = TrackSearch.create(trackId).apply {
+    fun toTrackSearch(trackerId: Long): TrackSearch = TrackSearch.create(trackerId).apply {
         remote_id = this@BGMSubject.id
         title = nameCn.ifBlank { name }
         cover_url = images?.common.orEmpty()

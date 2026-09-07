@@ -46,8 +46,8 @@ data class HKManga(
 ) {
     // RK: contentType ("manga"/"novel") keeps a novel bind on the /novel content tree; defaults to
     // manga so the existing manga callers are unchanged.
-    fun toTrack(trackId: Long, contentType: String = "manga"): TrackSearch {
-        return TrackSearch.create(trackId).apply {
+    fun toTrack(trackerId: Long, contentType: String = "manga"): TrackSearch {
+        return TrackSearch.create(trackerId).apply {
             remote_id = stringToNumber(this@HKManga.slug)
             title = this@HKManga.titleUa ?: this@HKManga.titleEn ?: this@HKManga.titleOriginal
             total_chapters = this@HKManga.chapters?.toLong() ?: 0

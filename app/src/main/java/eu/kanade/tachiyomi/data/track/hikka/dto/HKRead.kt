@@ -26,8 +26,8 @@ data class HKRead(
 ) {
     // RK: contentType ("manga"/"novel") keeps a novel bind on the /novel content tree; defaults to
     // manga so the existing manga callers are unchanged.
-    fun toTrack(trackId: Long, contentType: String = "manga"): TrackSearch {
-        return TrackSearch.create(trackId).apply {
+    fun toTrack(trackerId: Long, contentType: String = "manga"): TrackSearch {
+        return TrackSearch.create(trackerId).apply {
             val mangaContent = this@HKRead.content
             if (mangaContent != null) {
                 title = mangaContent.titleUa ?: mangaContent.titleEn ?: mangaContent.titleOriginal
