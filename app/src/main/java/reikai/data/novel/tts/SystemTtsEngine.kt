@@ -5,7 +5,9 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import reikai.domain.novel.tts.NovelTtsEngine
 import reikai.domain.novel.tts.TtsEngineInfo
+import reikai.domain.novel.tts.TtsUtteranceSplitter
 import reikai.domain.novel.tts.TtsVoice
+import java.util.Locale
 
 /**
  * [NovelTtsEngine] backed by Android's [TextToSpeech]. Initialization is asynchronous, so callers
@@ -38,11 +40,15 @@ class SystemTtsEngine(
     ).apply {
         setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) = fireDone()
+
+            // A paragraph can be several utterances, so only the last one finishes the caller's.
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == UTTERANCE_ID) fireDone()
+            }
 
             @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) = fireDone()
-            override fun onError(utteranceId: String?, errorCode: Int) = fireDone()
+            override fun onError(utteranceId: String?) = abort()
+            override fun onError(utteranceId: String?, errorCode: Int) = abort()
         })
     }
 
@@ -50,6 +56,16 @@ class SystemTtsEngine(
         val cb = pendingDone
         pendingDone = null
         cb?.invoke()
+    }
+
+    /** Ends the paragraph early. Whichever piece failed, the rest are dropped rather than read out of
+     *  context, and the caller is told so it moves on instead of waiting for a callback never coming.
+     *  The slot is cleared first, so the stop's own callbacks cannot come back around. */
+    private fun abort() {
+        val cb = pendingDone ?: return
+        pendingDone = null
+        runCatching { tts.stop() }
+        cb()
     }
 
     override fun availableEngines(): List<TtsEngineInfo> =
@@ -81,8 +97,28 @@ class SystemTtsEngine(
             onDone()
             return
         }
+        // The engine refuses an utterance past its own maximum outright, so a long paragraph arrives
+        // as several and only the last carries the id the listener completes on.
+        val pieces = TtsUtteranceSplitter.split(
+            text = text,
+            maxLength = TextToSpeech.getMaxSpeechInputLength(),
+            locale = runCatching { tts.voice?.locale }.getOrNull() ?: Locale.getDefault(),
+        )
+        if (pieces.isEmpty()) {
+            onDone()
+            return
+        }
         pendingDone = onDone
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+        pieces.forEachIndexed { index, piece ->
+            val queueMode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            val id = if (index == pieces.lastIndex) UTTERANCE_ID else PART_UTTERANCE_ID
+            // A refusal is reported as a return value and never reaches the listener, so without this
+            // nothing would clear the callback and playback would stop here for good.
+            if (tts.speak(piece, queueMode, null, id) == TextToSpeech.ERROR) {
+                abort()
+                return
+            }
+        }
     }
 
     override fun stop() {
@@ -96,6 +132,10 @@ class SystemTtsEngine(
     }
 
     private companion object {
+        /** Carried by the piece that ends a paragraph, which is the one the caller waits on. */
         const val UTTERANCE_ID = "reikai-novel-tts"
+
+        /** Carried by every piece before it, so finishing one does not finish the paragraph. */
+        const val PART_UTTERANCE_ID = "reikai-novel-tts-part"
     }
 }
