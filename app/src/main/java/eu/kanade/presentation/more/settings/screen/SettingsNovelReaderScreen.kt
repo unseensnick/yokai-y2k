@@ -5,8 +5,11 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.novel.NovelRegexRulesScreen
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import mihon.app.di.appGraph
@@ -144,6 +147,7 @@ object SettingsNovelReaderScreen : SearchableSettings {
      */
     @Composable
     private fun getChapterTextGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
+        val navigator = LocalNavigator.currentOrThrow
         val autoSplitEnabled by novelPreferences.readerAutoSplitText().collectAsState()
         val autoSplitWordCount by novelPreferences.readerAutoSplitWordCount().collectAsState()
 
@@ -186,6 +190,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     preference = novelPreferences.readerKeepEmbeddedJs(),
                     title = stringResource(MR.strings.pref_keep_embedded_js),
                     subtitle = stringResource(MR.strings.pref_keep_embedded_js_summary),
+                ),
+                // Its own screen rather than a row: a rule is five fields plus a preview, and the
+                // list has no useful upper bound.
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_novel_regex_rules),
+                    subtitle = stringResource(MR.strings.pref_novel_regex_rules_summary),
+                    onClick = { navigator.push(NovelRegexRulesScreen()) },
                 ),
             ),
         )
