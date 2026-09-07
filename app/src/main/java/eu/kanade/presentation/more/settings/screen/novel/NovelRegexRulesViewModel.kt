@@ -13,11 +13,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import reikai.domain.novel.NovelPreferences
 import reikai.novel.content.NovelRegexReplacement
 import reikai.novel.content.NovelRegexReplacements
+import reikai.novel.content.novelRegexRuleJson
 import tachiyomi.core.common.util.system.logcat
 
 @Immutable
@@ -92,11 +92,11 @@ class NovelRegexRulesViewModel(
     private fun rules() = decode(novelPreferences.readerRegexReplacements().get())
 
     private fun write(rules: List<NovelRegexReplacement>) {
-        novelPreferences.readerRegexReplacements().set(Json.encodeToString(rules))
+        novelPreferences.readerRegexReplacements().set(novelRegexRuleJson.encodeToString(rules))
     }
 
     private fun decode(json: String): List<NovelRegexReplacement> = try {
-        Json.decodeFromString(json)
+        novelRegexRuleJson.decodeFromString(json)
     } catch (e: Exception) {
         // An unreadable preference shows as an empty list rather than taking the screen down; saving
         // over it is how the user recovers.

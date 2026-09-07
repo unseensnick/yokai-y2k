@@ -61,7 +61,7 @@ fun NovelRegexRuleEditDialog(
     // Re-run on every edit rather than behind a button, so a pattern that stops compiling says so
     // while it is being typed and the Save button below can refuse it on the same signal.
     val preview = remember(pattern, replacement, isRegex, matchWholeWord, caseSensitive, sample) {
-        if (pattern.isEmpty()) null else onPreview(edited, sample)
+        if (pattern.isBlank()) null else onPreview(edited, sample)
     }
     val patternError = preview?.exceptionOrNull()
 
@@ -69,7 +69,9 @@ fun NovelRegexRuleEditDialog(
         onDismissRequest = onDismissRequest,
         confirmButton = {
             TextButton(
-                enabled = title.isNotBlank() && pattern.isNotEmpty() && patternError == null,
+                // Blank rather than empty: the pipeline skips a rule whose pattern is only whitespace,
+                // so accepting one here would save a rule the reader silently never applies.
+                enabled = title.isNotBlank() && pattern.isNotBlank() && patternError == null,
                 onClick = {
                     onSave(edited)
                     onDismissRequest()

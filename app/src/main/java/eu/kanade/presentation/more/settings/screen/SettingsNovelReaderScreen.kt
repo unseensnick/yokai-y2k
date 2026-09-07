@@ -158,6 +158,7 @@ object SettingsNovelReaderScreen : SearchableSettings {
     @Composable
     private fun getChapterTextGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
         val navigator = LocalNavigator.currentOrThrow
+        val renderingMode by novelPreferences.readerRenderingMode().collectAsState()
         val autoSplitEnabled by novelPreferences.readerAutoSplitText().collectAsState()
         val autoSplitWordCount by novelPreferences.readerAutoSplitWordCount().collectAsState()
 
@@ -195,12 +196,12 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     preference = novelPreferences.readerKeepEmbeddedCss(),
                     title = stringResource(MR.strings.pref_keep_embedded_css),
                     subtitle = stringResource(MR.strings.pref_keep_embedded_css_summary),
-                ),
+                ).takeIf { renderingMode != NovelRenderingMode.NATIVE },
                 Preference.PreferenceItem.SwitchPreference(
                     preference = novelPreferences.readerKeepEmbeddedJs(),
                     title = stringResource(MR.strings.pref_keep_embedded_js),
                     subtitle = stringResource(MR.strings.pref_keep_embedded_js_summary),
-                ),
+                ).takeIf { renderingMode != NovelRenderingMode.NATIVE },
                 // Its own screen rather than a row: a rule is five fields plus a preview, and the
                 // list has no useful upper bound.
                 Preference.PreferenceItem.TextPreference(

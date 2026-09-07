@@ -1,6 +1,5 @@
 package reikai.novel.content
 
-import kotlinx.serialization.json.Json
 import logcat.LogPriority
 import reikai.domain.novel.NovelPreferences
 import tachiyomi.core.common.util.system.logcat
@@ -55,7 +54,7 @@ object NovelRegexReplacements {
         val compiled = synchronized(cache) {
             cache.computeIfAbsent(rulesJson) { json ->
                 try {
-                    val rules: List<NovelRegexReplacement> = Json.decodeFromString(json)
+                    val rules: List<NovelRegexReplacement> = novelRegexRuleJson.decodeFromString(json)
                     rules.mapNotNull { rule ->
                         if (!rule.enabled || rule.pattern.isBlank()) return@mapNotNull null
                         try {
