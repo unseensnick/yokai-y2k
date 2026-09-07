@@ -58,6 +58,31 @@ class NovelTextViewport(
 
     private val adapter = BlockAdapter()
 
+    /**
+     * `viewer_container` blocks descendant focus (`reader_activity.xml:14`, upstream's, so the image
+     * viewers keep it), and an unfocusable TextView never initialises the Editor that draws
+     * selection handles. Lifted only while this viewport is attached, and only when selection is on.
+     * The parent is held rather than re-read, because a detach can arrive after it is gone.
+     * Declared above the recycler that registers it, or it is null when that runs.
+     */
+    private val focusableWhileAttached = object : View.OnAttachStateChangeListener {
+
+        private var host: ViewGroup? = null
+        private var blocked = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+
+        override fun onViewAttachedToWindow(v: View) {
+            val parent = v.parent as? ViewGroup ?: return
+            host = parent
+            blocked = parent.descendantFocusability
+            parent.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        }
+
+        override fun onViewDetachedFromWindow(v: View) {
+            host?.descendantFocusability = blocked
+            host = null
+        }
+    }
+
     private val recycler = RecyclerView(context).apply {
         layoutManager = LinearLayoutManager(context)
         adapter = this@NovelTextViewport.adapter
@@ -70,6 +95,7 @@ class NovelTextViewport(
                 if (state == RecyclerView.SCROLL_STATE_IDLE) onProgressSettled(percent())
             }
         })
+        if (textSelectable) addOnAttachStateChangeListener(focusableWhileAttached)
     }
 
     override val view: View get() = recycler

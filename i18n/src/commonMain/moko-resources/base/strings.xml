@@ -651,6 +651,8 @@
     <string name="pref_novel_rendering_mode_legacy">Original reader</string>
     <string name="pref_novel_rendering_mode_webview">New reader (in development)</string>
     <string name="pref_novel_rendering_mode_native">Native text (in development)</string>
+    <string name="pref_novel_text_selectable">Select text by long press</string>
+    <string name="pref_novel_text_selectable_summary">Long press a passage to select, copy or share it. Links stop responding to taps while this is on, and the change applies to the next chapter you open.</string>
     <string name="pref_category_accessibility">Accessibility</string>
     <string name="pref_tap_to_scroll">Tap edges to scroll</string>
     <string name="pref_swipe_between_chapters">Swipe between chapters</string>

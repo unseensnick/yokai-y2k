@@ -158,10 +158,12 @@ object SettingsNovelReaderScreen : SearchableSettings {
     }
 
     @Composable
-    private fun getReadingGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup =
-        Preference.PreferenceGroup(
+    private fun getReadingGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {
+        val renderingMode by novelPreferences.readerRenderingMode().collectAsState()
+
+        return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_reading),
-            preferenceItems = listOf(
+            preferenceItems = listOfNotNull(
                 // Read when a novel is opened, not while one is on screen, so a change applies to the
                 // next chapter opened rather than the session in progress.
                 Preference.PreferenceItem.ListPreference(
@@ -169,6 +171,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     entries = NovelRenderingMode.entries.associateWith { stringResource(it.titleRes) },
                     title = stringResource(MR.strings.pref_novel_rendering_mode),
                 ),
+                // Only the native renderer answers this. A WebView selects text on its own terms, so
+                // the row would toggle nothing in the other two modes.
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerTextSelectable(),
+                    title = stringResource(MR.strings.pref_novel_text_selectable),
+                    subtitle = stringResource(MR.strings.pref_novel_text_selectable_summary),
+                ).takeIf { renderingMode == NovelRenderingMode.NATIVE },
                 Preference.PreferenceItem.ListPreference(
                     preference = novelPreferences.readerDefaultOrientation(),
                     entries = ReaderOrientation.entries
@@ -213,6 +222,7 @@ object SettingsNovelReaderScreen : SearchableSettings {
                 ),
             ),
         )
+    }
 
     @Composable
     private fun getNavigationGroup(novelPreferences: NovelPreferences): Preference.PreferenceGroup {

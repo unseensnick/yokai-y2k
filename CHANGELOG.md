@@ -85,6 +85,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 **Reader**
 
 - **Manga pages can now be drawn by a new high quality renderer, switched on under Settings -> Advanced (synced from Mihon, mihonapp/mihon#3388).** It brings dual page view, page transition animations, a display cutout mode, and a Min width slider that sets how much of the screen a long strip fills.
+- **Text in the native novel reader can now be selected, copied and shared, switched on under Settings -> Novel reader.** Links stop responding to taps while it is on, so the two are a choice rather than both at once.
 
 **App**
 
