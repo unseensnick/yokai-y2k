@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
@@ -13,6 +14,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.browse.ExtensionStoresScreen
 import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.authenticate
+import exh.md.utils.MdUtil
 import mihon.app.di.appGraph
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
@@ -44,6 +46,12 @@ object SettingsBrowseScreen : SearchableSettings {
 
         val adultSourcesEnabled by exhPreferences.isHentaiEnabled().changes()
             .collectAsState(exhPreferences.isHentaiEnabled().get())
+
+        // RK: resolved once rather than through isEnabled(), which blocks on a suspending source
+        // lookup and would run it again on every recomposition of this screen.
+        val mangaDexEnabled by produceState(initialValue = false) {
+            value = MdUtil.getEnabledMangaDex(context) != null
+        }
 
         // RK: page previews are a source capability (four sources implement PagePreviewSource), so the
         // row lives with sources rather than with the app-wide look it used to sit under.
@@ -134,7 +142,7 @@ object SettingsBrowseScreen : SearchableSettings {
             // RK --> settings owned by the app rather than by an installed extension, so they have
             // nowhere to live on the source itself. Each row appears only while its source is on, and
             // the group disappears entirely when neither is, which is why it is built conditionally.
-            getSourceSettingsGroup(navigator, adultSourcesEnabled),
+            getSourceSettingsGroup(navigator, adultSourcesEnabled, mangaDexEnabled),
             // RK <--
         )
     }
@@ -143,11 +151,13 @@ object SettingsBrowseScreen : SearchableSettings {
     private fun getSourceSettingsGroup(
         navigator: Navigator,
         adultSourcesEnabled: Boolean,
+        mangaDexEnabled: Boolean,
     ): Preference.PreferenceGroup? {
         val rows = listOfNotNull(
-            // The gate is passed in as observed state rather than read through isEnabled(), which is a
-            // plain pref read: without a snapshot dependency this row would not appear until the screen
-            // was recreated, even though the switch that reveals it is right above.
+            // Both gates are passed in as observed state rather than read through isEnabled(), which is
+            // a plain pref read for one and a blocking source lookup for the other: without a snapshot
+            // dependency the first row would not appear until the screen was recreated, even though the
+            // switch that reveals it is right above, and the second would block on every recomposition.
             Preference.PreferenceItem.TextPreference(
                 title = stringResource(MR.strings.pref_category_eh),
                 subtitle = stringResource(MR.strings.pref_ehentai_summary),
@@ -157,7 +167,7 @@ object SettingsBrowseScreen : SearchableSettings {
                 title = stringResource(MR.strings.pref_category_mangadex),
                 subtitle = stringResource(MR.strings.pref_mangadex_summary),
                 onClick = { navigator.push(SettingsMangaDexScreen) },
-            ).takeIf { SettingsMangaDexScreen.isEnabled() },
+            ).takeIf { mangaDexEnabled },
         )
         return if (rows.isEmpty()) {
             null

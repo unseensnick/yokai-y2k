@@ -26,7 +26,6 @@ import reikai.data.novel.update.NovelUpdateJob
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.novel.NovelPreferences
 import reikai.presentation.library.preferredsources.PreferredSourcesScreen
-import reikai.presentation.recommendation.SettingsRecommendationsScreen
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_CHARGING
