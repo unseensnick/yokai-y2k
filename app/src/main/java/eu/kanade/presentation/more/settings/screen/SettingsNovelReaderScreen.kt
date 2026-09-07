@@ -3,18 +3,21 @@ package eu.kanade.presentation.more.settings.screen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.novel.NovelFontsScreen
 import eu.kanade.presentation.more.settings.screen.novel.NovelRegexRulesScreen
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderBottomButton
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import mihon.app.di.appGraph
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRenderingMode
+import reikai.novel.font.NovelFont
 import reikai.presentation.novel.reader.readerFonts
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -63,6 +66,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
         val indent by indentPref.collectAsState()
         val spacing by spacingPref.collectAsState()
         val lineSpacing by lineSpacingPref.collectAsState()
+        val navigator = LocalNavigator.currentOrThrow
+        val context = LocalContext.current
+        // Re-read whenever the screen comes back, since the fonts screen is where they are added and
+        // removed and this list is what makes one selectable.
+        val customFonts by produceState(emptyList<NovelFont>()) {
+            value = context.appGraph.novelFontManager.installed()
+        }
 
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_text_display),
@@ -77,8 +87,13 @@ object SettingsNovelReaderScreen : SearchableSettings {
                         } else {
                             font.name
                         }
-                    },
+                    } + customFonts.associate { it.fileName to it.displayName },
                     title = stringResource(MR.strings.pref_novel_font),
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_novel_fonts),
+                    subtitle = stringResource(MR.strings.pref_novel_fonts_summary),
+                    onClick = { navigator.push(NovelFontsScreen()) },
                 ),
                 Preference.PreferenceItem.SliderPreference(
                     value = (lineSpacing * TENTHS).roundToInt(),

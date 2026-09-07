@@ -2,6 +2,8 @@ package reikai.presentation.novel.reader
 
 import org.json.JSONArray
 import org.json.JSONObject
+import reikai.novel.font.fontDisplayName
+import reikai.novel.font.isSupportedFontFile
 
 /** Asset root for the bundled LNReader web layer (CSS/JS copied verbatim from lnreader-main). */
 private const val ASSET_BASE = "file:///android_asset/lnreader-web"
@@ -43,6 +45,8 @@ fun buildReaderHtml(
     colors: ReaderThemeColors,
     statusBarHeightPx: Int,
     debug: Boolean,
+    /** Where a font the user added can be read from, or null for a bundled family. */
+    customFontUrl: String? = null,
 ): String {
     val readerSettings = readerSettingsJson(settings)
     val generalSettings = generalSettingsJson(settings)
@@ -82,6 +86,7 @@ fun buildReaderHtml(
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
         <link rel="stylesheet" href="$ASSET_BASE/css/index.css">
         <style>
+        ${customFontFace(settings.fontFamily, customFontUrl)}
         :root {
           --StatusBar-currentHeight: ${statusBarHeightPx}px;
           --readerSettings-theme: ${settings.backgroundColor};
@@ -90,7 +95,7 @@ fun buildReaderHtml(
           --readerSettings-textColor: ${settings.textColor};
           --readerSettings-textAlign: ${settings.textAlign};
           --readerSettings-lineHeight: ${settings.lineHeight};
-          --readerSettings-fontFamily: ${settings.fontFamily};
+          --readerSettings-fontFamily: ${webFontFamily(settings.fontFamily)};
           --readerSettings-paragraphIndent: ${settings.paragraphIndent}em;
           --readerSettings-paragraphSpacing: ${settings.paragraphSpacing}em;
           --readerSettings-marginTop: ${settings.margins.top}px;
@@ -255,7 +260,9 @@ fun readerSettingsJson(settings: NovelReaderSettings): JSONObject = JSONObject()
     // The web layer knows one padding value, and the document's own rule owns the four. This still
     // drives the next-chapter button's side margins, which read the same variable.
     put("padding", settings.margins.left)
-    put("fontFamily", settings.fontFamily)
+    put("fontFamily", webFontFamily(settings.fontFamily))
+    // `core.js` builds an assets URL from the family, which only a bundled face has.
+    put("customFont", isSupportedFontFile(settings.fontFamily))
     put("lineHeight", settings.lineHeight.toDouble())
     put("customCSS", "")
     put("customJS", "")
@@ -279,3 +286,21 @@ private fun escapeHtml(text: String): String = text
     .replace("&", "&amp;")
     .replace("<", "&lt;")
     .replace(">", "&gt;")
+
+/**
+ * The `@font-face` a font the user added needs, since it lives under their storage location rather
+ * than in the assets folder the bundled faces come from. Declared in the head rather than through
+ * `core.js`'s FontFace call, so it survives the settings pushes that clear the ones added at runtime.
+ */
+private fun customFontFace(family: String, url: String?): String {
+    if (url == null || !isSupportedFontFile(family)) return ""
+    return "@font-face { font-family: '${webFontFamily(family)}'; src: url('$url'); }"
+}
+
+/**
+ * What the web layer is told the family is called. A font the user added is stored as its file name,
+ * and `font-family: Merriweather.ttf` is not a valid CSS family, so the page fell back to sans-serif
+ * with the face declared and never referenced. The readable name has no dot in it.
+ */
+private fun webFontFamily(family: String): String =
+    if (isSupportedFontFile(family)) fontDisplayName(family) else family

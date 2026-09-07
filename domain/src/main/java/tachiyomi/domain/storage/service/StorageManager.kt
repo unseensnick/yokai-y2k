@@ -45,10 +45,12 @@ class StorageManager(
                     parent.createDirectory(DOWNLOADS_PATH).also {
                         DiskUtil.createNoMediaFile(it, context)
                     }
-                    // RK --> light-novel chapter downloads, separate from manga downloads
+                    // RK --> light-novel chapter downloads, separate from manga downloads, and the
+                    // reader fonts the user imports or downloads
                     parent.createDirectory(NOVEL_DOWNLOADS_PATH).also {
                         DiskUtil.createNoMediaFile(it, context)
                     }
+                    parent.createDirectory(FONTS_PATH)
                     // RK <--
                 }
                 _changes.send(Unit)
@@ -77,6 +79,12 @@ class StorageManager(
     fun getNovelDownloadsDirectory(): UniFile? {
         return baseDir?.createDirectory(NOVEL_DOWNLOADS_PATH)
     }
+
+    /** Reader fonts the user imported or downloaded. Deliberately not marked `.nomedia`: these are the
+     *  user's own files and a file manager should show them. */
+    fun getFontsDirectory(): UniFile? {
+        return baseDir?.createDirectory(FONTS_PATH)
+    }
     // RK <--
 }
 
@@ -84,5 +92,6 @@ private const val AUTOMATIC_BACKUPS_PATH = "autobackup"
 private const val DOWNLOADS_PATH = "downloads"
 private const val LOCAL_SOURCE_PATH = "local"
 
-// RK: light-novel chapter downloads
+// RK: light-novel chapter downloads and the reader fonts the user adds
 private const val NOVEL_DOWNLOADS_PATH = "novel_downloads"
+private const val FONTS_PATH = "fonts"

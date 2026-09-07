@@ -89,6 +89,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Font, line spacing and text alignment are now under Settings -> Novel reader, so the new readers can set them.** They only had controls in the original reader, which meant switching rendering mode left your font stuck where it was.
 - **Bionic reading, Remove extra spacing, Tap edges to scroll, Swipe between chapters and volume-key scrolling now work in the native novel reader.** All five toggled but did nothing there, because only the WebView readers had anything behind them.
 - **Settings -> Novel reader can now find and replace text in a chapter before you read it.** Each rule matches plain text or a pattern, and a sample box shows what it would do before you save it.
+- **Settings -> Novel reader can now read your own fonts, imported from a file or downloaded from Google Fonts.** They sit in a fonts folder beside your downloads and work in every rendering mode.
 - **Auto-scroll now works in the new shared novel reader, and Settings -> Novel reader has a Scroll speed slider for it.** Its bottom-bar button never appeared there and the setting scrolled nothing.
 
 **App**

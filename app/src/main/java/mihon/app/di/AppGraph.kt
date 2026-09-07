@@ -69,6 +69,7 @@ import reikai.domain.recommendation.taste.RefreshTrackerLibrary
 import reikai.domain.recommendation.taste.TasteLibraryRepository
 import reikai.domain.source.ReikaiSourcePreferences
 import reikai.novel.download.NovelDownloadJob
+import reikai.novel.font.NovelFontManager
 import reikai.novel.update.LnPluginUpdateChecker
 import reikai.presentation.details.MangaEntryCoverViewModel
 import reikai.presentation.library.MangaLibraryAdapter
@@ -183,6 +184,7 @@ interface AppGraph : ViewModelGraph {
     val downloadCache: DownloadCache
     val mangaMergeManager: MangaMergeManager
     val novelMergeManager: NovelMergeManager
+    val novelFontManager: NovelFontManager
     val migrationPickHandoff: MigrationPickHandoff
 
     // The two details adapters build their cover model for whichever entry the source chip is showing,

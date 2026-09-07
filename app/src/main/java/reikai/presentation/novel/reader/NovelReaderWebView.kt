@@ -25,6 +25,7 @@ import eu.kanade.tachiyomi.util.system.setDefaultSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import logcat.logcat
+import mihon.app.di.appGraph
 import kotlin.math.roundToInt
 
 /**
@@ -160,6 +161,10 @@ fun NovelReaderWebView(
     // reloading, and the document bakes in whatever was set when it was built. The build is off the
     // main thread because a downloaded chapter has its images inlined, so the string runs to megabytes.
     LaunchedEffect(html, themeColors, chapterTitle, initialProgressPercent, hasPrev, hasNext, topInsetDp, baseUrl) {
+        // Off the main thread with the build: resolving it copies the file out of the user's folder.
+        val fontUrl = withContext(Dispatchers.IO) {
+            context.appGraph.novelFontManager.webUrl(currentSettings.value.fontFamily)
+        }
         val document = withContext(Dispatchers.Default) {
             buildReaderHtml(
                 chapterHtml = html,
@@ -171,6 +176,7 @@ fun NovelReaderWebView(
                 colors = themeColors,
                 statusBarHeightPx = topInsetDp,
                 debug = BuildConfig.DEBUG,
+                customFontUrl = fontUrl,
             )
         }
         // Only trust an http(s) base URL. src.site is plugin-controlled, and with allowFileAccess on

@@ -9,6 +9,8 @@ import android.view.Gravity
 import android.view.View
 import android.widget.TextView
 import logcat.LogPriority
+import mihon.app.di.appGraph
+import reikai.novel.font.isSupportedFontFile
 import reikai.presentation.novel.reader.NovelReaderSettings
 import tachiyomi.core.common.util.system.logcat
 
@@ -83,9 +85,16 @@ object NovelTextStyle {
         fallback
     }
 
-    /** Cached because a chapter builds one view per 6000 characters and each would re-read the file. */
+    /**
+     * A bundled face is stored as its key and a font the user added as its file name, so the suffix
+     * is what tells them apart: a bundled key never carries one. Cached because a chapter builds one
+     * view per 6000 characters and each would otherwise re-read the file.
+     */
     private fun typefaceFor(context: Context, family: String): Typeface {
         if (family.isBlank()) return Typeface.DEFAULT
+        if (isSupportedFontFile(family)) {
+            return context.appGraph.novelFontManager.typeface(family) ?: Typeface.DEFAULT
+        }
         val cached = typefaceCache.getOrPut(family) {
             runCatching { Typeface.createFromAsset(context.assets, "fonts/$family.ttf") }
                 .onFailure { logcat(LogPriority.WARN, it) { "Missing reader font asset: $family" } }
