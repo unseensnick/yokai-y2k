@@ -332,9 +332,15 @@ class NovelReaderViewModel(
         persistProgress(id, percent)
     }
 
-    /** The chapter being read, which a merged session moves across sources. */
+    /** The chapter on screen, which a merged session moves across sources. Every bar verb acts on this
+     *  one, so it advances only once a chapter has actually rendered. */
     @Volatile
     private var currentChapterId: Long = initialChapterId
+
+    /** The chapter a load is aiming at, which is what a retry repeats. Separate from [currentChapterId]
+     *  because a load that fails leaves the reader showing what it had. */
+    @Volatile
+    private var pendingChapterId: Long = initialChapterId
 
     /** Every chapter this session can reach, in reading order, duplicates and hidden ones already gone. */
     @Volatile
@@ -390,7 +396,7 @@ class NovelReaderViewModel(
             flushProgress()
             updateHistory()
             if (markDepartedRead) markReadOnSkip(currentChapterId, currentNovelId)
-            currentChapterId = chapterId
+            pendingChapterId = chapterId
             load()
         }
     }
@@ -401,16 +407,21 @@ class NovelReaderViewModel(
      * leaving the reader looking like nothing happened.
      */
     private fun load() {
+        val target = pendingChapterId
         loadState.value = ReaderLoadState.Loading
         viewModelScope.launchIO {
             try {
                 incognitoMode = getIncognitoState.await(null)
                 if (orderedIds.isEmpty()) resolveReadingOrder()
-                val row = chapterRepo.getById(currentChapterId) ?: error("Chapter not found: $currentChapterId")
+                val row = chapterRepo.getById(target) ?: error("Chapter not found: $target")
+                val (html, baseUrl) = htmlCache[row.id] ?: loadChapterHtml(row).also { htmlCache[row.id] = it }
+                // Committed only here, because everything above can throw and the reader goes on
+                // rendering the chapter it already had. Moving these any earlier pointed the bookmark
+                // and the web actions at a chapter that never appeared.
+                currentChapterId = row.id
                 currentNovelId = row.novelId
                 chapterReadStartTime = System.currentTimeMillis()
                 bookmarkedState.value = row.bookmark
-                val (html, baseUrl) = htmlCache[row.id] ?: loadChapterHtml(row).also { htmlCache[row.id] = it }
                 loadedChapter.value = LoadedChapter(
                     chapterId = row.id,
                     title = row.name,
@@ -431,7 +442,7 @@ class NovelReaderViewModel(
                 // Leaving the reader cancels this scope, and swallowing that would report a load
                 // failure for a chapter nobody is waiting for any more.
                 if (e is CancellationException) throw e
-                logcat(LogPriority.ERROR, e) { "Failed to load novel chapter $currentChapterId" }
+                logcat(LogPriority.ERROR, e) { "Failed to load novel chapter $target" }
                 loadState.value = ReaderLoadState.Failed(e.message)
             }
         }
