@@ -39,7 +39,7 @@ Symbols below are in `refs/tsundoku` at review time.
 
 ## Status
 
-Evaluated and recommended (2026-07-11), rescoped 2026-08-07. **Option 3 is the work, queued in 0.4.0 and starting with a migration-planning `/scout`; Option 1 is not being built.** Neither has started. Backlog lines in [ROADMAP.md](../../../ROADMAP.md), where Option 3 sits under Next and Option 1 under Parked / not building.
+Evaluated and recommended (2026-07-11), rescoped 2026-08-07. **Option 3 is the work, queued in 0.4.0; Option 1 is not being built.** Option 3 was absorbed into the reader takeover, which has shipped its steps 0 to 4b and 6, so the native renderer and the shared content pipeline are in. Option 1 has not started and is not going to. Backlog lines in [ROADMAP.md](../../../ROADMAP.md), where Option 3 sits under Next and Option 1 under Parked / not building.
 
 **Two things the migration inherits, found by the DI audit (2026-08-21) rather than by planning this
 work.** The TTS transport is wired only by the reader model: `NovelTtsService` routes its MediaSession,

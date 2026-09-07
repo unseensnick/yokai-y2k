@@ -66,11 +66,11 @@ Build in Android Studio. Gradle: JDK 21 (Temurin 21.0.11; matches `.github/.java
 
 **The cut is gated, and the top of [ROADMAP.md](ROADMAP.md) is the only place the gate list lives** (owner rulings 2026-08-21 and 2026-08-25). Read it there rather than restating it here, so the two cannot disagree. Nothing else moves the cut.
 
-**0.3.0 shipped**: tagged `v0.3.0` -> `4b9f0e0c6`, released, and moved to [docs/dev/shipped.md](docs/dev/shipped.md). `app/build.gradle.kts` reads `versionName 0.3.0` / `versionCode 190` (the `versionCode` climbs mid-cycle whenever a preference migration needs it, see below; `versionName` moves at the 0.4.0 cut). Notes for continuing sessions:
+**0.3.0, 0.3.1 and 0.3.2 have shipped**, tagged and moved to [docs/dev/shipped.md](docs/dev/shipped.md); 0.3.2 is the cut that renamed the app to `app.reikai`. `app/build.gradle.kts` reads `versionName 0.3.2` / `versionCode 191` (the `versionCode` climbs mid-cycle whenever a preference migration needs it, see below; `versionName` moves at the 0.4.0 cut). Notes for continuing sessions:
 
 - New work lands its CHANGELOG entries under `[Unreleased]` and normally bumps nothing: `versionCode` / `versionName` move only at release-cut (see the `feedback_version_bumps` memory). **Standing exception:** a version-gated data migration is a no-op until the shipped `versionCode` reaches its gate, so adding one bumps `versionCode` mid-cycle to make it fire in dev / preview builds and be testable. That is why this cycle already climbed `183 -> 190`. `versionName` stays `0.3.0` until the cut.
 - **The bump rule covers `mihon.core.migration` only, never a SQLDelight `.sqm`.** A schema migration runs off the database's own `user_version` against the derived `Database.Schema.version` (`AppBindings.providesSqlDriver` hands the driver `schema = Database.Schema`), so adding the next-numbered `.sqm` is the whole change and `versionCode` stays put. Verified on an upgraded database, 2026-08-14.
-- **Each preference migration gates on its own `versionCode`, never a reused one.** The current top is `BackfillChapterMatchKeysMigration` (`version = 190f`) on `versionCode 190`; grep `override val version` under `mihon/core/migration/migrations/` for the ones below it. A new migration gates on 191+ and bumps `versionCode` to match.
+- **Each preference migration gates on its own `versionCode`, never a reused one.** The current top is `SplitNovelReaderPaddingMigration` (`version = 191f`) on `versionCode 191`; grep `override val version` under `mihon/core/migration/migrations/` for the ones below it. A new migration gates on 192+ and bumps `versionCode` to match.
 
 ## Design context
 
