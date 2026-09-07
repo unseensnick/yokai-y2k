@@ -84,6 +84,7 @@ import eu.kanade.tachiyomi.util.system.readerBackgroundColor
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -226,6 +227,10 @@ class ReaderActivity : BaseActivity() {
             }
         }
     }
+
+    /** Whether the reader is on screen, which auto-scroll reads so it does not keep running behind
+     *  another app. Not `lifecycleScope`'s job: that scope lives to onDestroy. */
+    private val isOnScreen = MutableStateFlow(false)
 
     /** The novel half of the session, or null when this launch is a manga one. */
     private val novelSession: NovelReaderProvider? by lazy {
@@ -635,13 +640,16 @@ class ReaderActivity : BaseActivity() {
             .onEach(viewport::applySettings)
             .launchIn(lifecycleScope)
 
-        // Auto-scroll pauses while the chrome is showing, which is the host's own state rather than a
-        // setting, so the decision is made once here and each renderer only starts and stops.
+        // Auto-scroll pauses while the chrome is showing and while the reader is off screen, both of
+        // which are the host's own state rather than settings, so the decision is made once here and
+        // each renderer only starts and stops. Off screen matters because the loop is not lifecycle
+        // aware: left running it advances the chapter behind whatever the reader is looking at.
         combine(
             resolvedSettings,
             viewModel.state.map { it.menuVisible },
-        ) { settings, menuVisible ->
-            (settings.autoScroll && !menuVisible) to settings.autoScrollSpeed
+            isOnScreen,
+        ) { settings, menuVisible, onScreen ->
+            (settings.autoScroll && !menuVisible && onScreen) to settings.autoScrollSpeed
         }
             .distinctUntilChanged()
             .onEach { (running, speed) -> viewport.setAutoScroll(running, speed) }
@@ -680,12 +688,25 @@ class ReaderActivity : BaseActivity() {
     // RK <--
 
     override fun onPause() {
+        // RK: the novel model debounces its position writes, so the pending one is flushed here or
+        // being backgrounded and killed loses it.
+        novelSession?.viewModel?.flushProgress()
         lifecycleScope.launchNonCancellable {
             // RK: whichever session this is writes its own history row; the manga model has nothing
             // to write for a novel launch, where it was never given an entry.
             novelSession?.viewModel?.updateHistory() ?: viewModel.updateHistory()
         }
         super.onPause()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isOnScreen.value = true
+    }
+
+    override fun onStop() {
+        isOnScreen.value = false
+        super.onStop()
     }
 
     /**

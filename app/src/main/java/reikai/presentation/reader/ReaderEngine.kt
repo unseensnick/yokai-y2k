@@ -76,8 +76,10 @@ class ReaderEngine(
     val webUrl: StateFlow<String?> =
         provider.webUrl.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** Scrubbing goes to the viewport rather than the provider, since only it can move the reader. */
+    /** Scrubbing goes to the viewport rather than the provider, since only it can move the reader.
+     *  A running auto-scroll is stopped first: it would drag the reader off the position just picked. */
     fun seek(progress: ChapterProgress) {
+        provider.autoScroll?.stop()
         viewport.value?.seekTo(progress)
     }
 

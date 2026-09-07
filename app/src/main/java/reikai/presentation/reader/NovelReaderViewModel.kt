@@ -18,6 +18,8 @@ import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderOrientation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -59,6 +61,7 @@ import reikai.novel.source.NovelSourceManager
 import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.novel.reader.ReaderMargins
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import java.util.Collections
@@ -282,12 +285,51 @@ class NovelReaderViewModel(
 
     /**
      * How far down the open chapter the reader is, as a whole percent. Reported on every scroll frame,
-     * which is what the navigator follows; [saveProgress] is the settled one that persists.
+     * which is what the navigator follows.
      */
     val progressPercent: StateFlow<Int> = liveProgress
 
+    private var progressSaveJob: Job? = null
+
+    /** The reported position not yet written, with the chapter it belongs to: a step must not let a
+     *  debounced write land on the chapter that replaced it. Volatile because the web layer settles
+     *  from its own JS thread while a scroll reports from the main one. */
+    @Volatile
+    private var pendingSave: Pair<Long, Int>? = null
+
+    @Volatile
+    private var lastSavedPercent = -1
+
+    /**
+     * Every scroll persists, debounced. Keying the write on a settle instead lost an auto-scrolled or
+     * scrubbed read entirely, because those move the viewport without a touch to end.
+     */
     fun reportProgress(percent: Int) {
-        liveProgress.value = percent.coerceIn(0, 100)
+        val clamped = percent.coerceIn(0, 100)
+        liveProgress.value = clamped
+        val id = loadedChapter.value?.chapterId ?: return
+        if (clamped == lastSavedPercent) return
+        lastSavedPercent = clamped
+        pendingSave = id to clamped
+        progressSaveJob?.cancel()
+        // Finishing carries mark-as-read, the sibling marking and the tracker push, so it never waits.
+        if (clamped >= COMPLETE_PERCENT) {
+            flushProgress()
+            return
+        }
+        progressSaveJob = viewModelScope.launchUI {
+            delay(PROGRESS_SAVE_DEBOUNCE_MS)
+            flushProgress()
+        }
+    }
+
+    /** Write the last reported position now. The host calls this on pause, so being backgrounded or
+     *  killed cannot drop a debounced write. */
+    fun flushProgress() {
+        progressSaveJob?.cancel()
+        val (id, percent) = pendingSave ?: return
+        pendingSave = null
+        persistProgress(id, percent)
     }
 
     /** The chapter being read, which a merged session moves across sources. */
@@ -343,7 +385,9 @@ class NovelReaderViewModel(
     private fun goTo(chapterId: Long, markDepartedRead: Boolean = false) {
         viewModelScope.launchIO {
             // The departed chapter is stamped into history before the switch, and marked read while it
-            // and its owning novel are still the current ones.
+            // and its owning novel are still the current ones. Its pending position is written first,
+            // or the debounce would still be waiting when the chapter it belongs to stops being current.
+            flushProgress()
             updateHistory()
             if (markDepartedRead) markReadOnSkip(currentChapterId, currentNovelId)
             currentChapterId = chapterId
@@ -375,7 +419,12 @@ class NovelReaderViewModel(
                     baseUrl = baseUrl,
                     // Stored as 0..10000 (hundredths of a percent); the web layer wants 0..100.
                     progressPercent = (row.lastTextProgress / 100).coerceIn(0L, 100L).toInt(),
-                ).also { liveProgress.value = it.progressPercent }
+                ).also {
+                    liveProgress.value = it.progressPercent
+                    // The arriving chapter has saved nothing yet, so its first report must not be read
+                    // as a repeat of the chapter before it.
+                    lastSavedPercent = -1
+                }
                 resolveNeighbours()
                 loadState.value = ReaderLoadState.Idle
             } catch (e: Throwable) {
@@ -388,17 +437,25 @@ class NovelReaderViewModel(
         }
     }
 
-    /** Persist the reader's scroll position. The web layer reports a whole percent (0..100); store it
-     *  as 0..10000 to match [NovelChapter.lastTextProgress]. Reaching the end auto-marks read. */
+    /** A renderer that knows its own scroll has settled, which the web layer reports on scrollend. */
     fun saveProgress(percent: Int) {
-        if (incognitoMode) return
         val id = loadedChapter.value?.chapterId ?: return
         val clamped = percent.coerceIn(0, 100)
+        progressSaveJob?.cancel()
+        pendingSave = null
+        lastSavedPercent = clamped
+        persistProgress(id, clamped)
+    }
+
+    /** Persist the reader's scroll position for [id]. The renderers report a whole percent (0..100);
+     *  store it as 0..10000 to match [NovelChapter.lastTextProgress]. Reaching the end auto-marks read. */
+    private fun persistProgress(id: Long, clamped: Int) {
+        if (incognitoMode) return
         viewModelScope.launchIO {
             chapterRepo.setLastTextProgress(id, clamped * 100L)
             // Stamp the owning novel's last-read time so the LastRead library sort reflects this read.
             novelRepo.setLastReadAt(currentNovelId, System.currentTimeMillis())
-            if (clamped >= 97) {
+            if (clamped >= COMPLETE_PERCENT) {
                 // Fetch before marking so the shared interactor sees the chapter as still unread; it flips
                 // read + honors "delete after marked as read".
                 val chapter = chapterRepo.getById(id)
@@ -815,3 +872,10 @@ class NovelReaderViewModel(
 /** Chapters held in the forward-prefetch cache. Small: it exists to make one step instant, not to
  *  keep a session's reading in memory. */
 private const val MAX_CACHED_CHAPTERS = 5
+
+/** A scroll reports continuously, so a write waits this long for the next one rather than hitting the
+ *  database on every whole percent. */
+private const val PROGRESS_SAVE_DEBOUNCE_MS = 500L
+
+/** Where a continuously scrolled chapter counts as read. */
+private const val COMPLETE_PERCENT = 97

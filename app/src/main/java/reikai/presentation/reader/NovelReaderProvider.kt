@@ -94,6 +94,10 @@ class NovelReaderProvider(
         override val enabled: Flow<Boolean> = viewModel.settings.map { it.autoScroll }
 
         override fun toggle() = viewModel.setAutoScroll(!viewModel.settings.value.autoScroll)
+
+        override fun stop() {
+            if (viewModel.settings.value.autoScroll) viewModel.setAutoScroll(false)
+        }
     }
 
     override val orientation: Flow<Int> = viewModel.settings.map { it.orientation }

@@ -272,6 +272,36 @@ class ReaderEngineTest {
 
         engine.autoScrollEnabled.value shouldBe true
     }
+
+    /**
+     * A scrub is an explicit position choice, and a running auto-scroll would carry the reader off it
+     * within a frame, so the engine stops it before the viewport moves.
+     */
+    @Test
+    fun `scrubbing stops a running auto-scroll`() {
+        val provider = FakeReaderProvider()
+        val auto = FakeAutoScroll()
+        provider.autoScrollSlot = auto
+        val engine = engine(provider)
+        engine.installViewport(FakeViewport())
+        auto.toggle()
+
+        engine.seek(ChapterProgress.Percent(hundredths = 5000))
+
+        engine.autoScrollEnabled.value shouldBe false
+    }
+
+    /** A session with no auto-scroll still scrubs, rather than the engine reaching through a null. */
+    @Test
+    fun `scrubbing a session without auto-scroll still moves the viewport`() {
+        val engine = engine()
+        val viewport = FakeViewport()
+        engine.installViewport(viewport)
+
+        engine.seek(ChapterProgress.Percent(hundredths = 5000))
+
+        viewport.sought shouldBe ChapterProgress.Percent(hundredths = 5000)
+    }
 }
 
 private class FakeAutoScroll : ReaderAutoScroll {
@@ -279,6 +309,10 @@ private class FakeAutoScroll : ReaderAutoScroll {
 
     override fun toggle() {
         enabled.value = !enabled.value
+    }
+
+    override fun stop() {
+        enabled.value = false
     }
 }
 

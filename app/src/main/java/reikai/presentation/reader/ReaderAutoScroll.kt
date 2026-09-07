@@ -17,4 +17,8 @@ interface ReaderAutoScroll {
 
     /** A flip rather than a set, because the button shows the state it is inverting. */
     fun toggle()
+
+    /** Turn it off wherever the reader is about to move somewhere the user chose, so the scroll does
+     *  not immediately carry them away from it. */
+    fun stop()
 }
