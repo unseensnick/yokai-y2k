@@ -15,6 +15,7 @@ data class NovelContentConfig(
     val hideTitle: Boolean = false,
     val forceLowercase: Boolean = false,
     val blockMedia: Boolean = false,
+    val removeExtraSpacing: Boolean = false,
     val keepEmbeddedCss: Boolean = true,
     val keepEmbeddedJs: Boolean = false,
 ) {
@@ -31,6 +32,7 @@ data class NovelContentConfig(
             hideTitle = preferences.readerHideChapterTitle().get(),
             forceLowercase = preferences.readerForceLowercase().get(),
             blockMedia = preferences.readerBlockMedia().get(),
+            removeExtraSpacing = preferences.readerRemoveExtraSpacing().get(),
             keepEmbeddedCss = preferences.readerKeepEmbeddedCss().get(),
             keepEmbeddedJs = preferences.readerKeepEmbeddedJs().get(),
         )

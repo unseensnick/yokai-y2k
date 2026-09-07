@@ -206,7 +206,9 @@ fun generalSettingsJson(settings: NovelReaderSettings): JSONObject = JSONObject(
     put("autoScrollInterval", 10)
     put("autoScrollOffset", JSONObject.NULL)
     put("verticalSeekbar", false)
-    put("removeExtraParagraphSpacing", settings.removeExtraSpacing)
+    // The pipeline strips the padding now, for every rendering mode. Left off here so `core.js`
+    // does not run its own pass over markup that has already been through ours.
+    put("removeExtraParagraphSpacing", false)
     put("bionicReading", settings.bionicReading)
     put("tapToScroll", settings.tapToScroll)
     put("TTSEnable", settings.ttsEnabled)

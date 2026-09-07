@@ -9,7 +9,7 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("an unchanged shape needs no redraw")
     fun unchangedNeedsNoRedraw() {
-        val shape = ParagraphShape(indent = 1f, spacing = 0.5f, fontSize = 16)
+        val shape = ParagraphShape(indent = 1f, spacing = 0.5f, fontSize = 16, bionic = false)
 
         shape.needsRedrawFor(shape) shouldBe false
     }
@@ -17,7 +17,7 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("a changed indent needs a redraw")
     fun changedIndentNeedsRedraw() {
-        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16)
+        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16, bionic = false)
 
         before.needsRedrawFor(before.copy(indent = 2f)) shouldBe true
     }
@@ -25,7 +25,7 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("a changed spacing needs a redraw")
     fun changedSpacingNeedsRedraw() {
-        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16)
+        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16, bionic = false)
 
         before.needsRedrawFor(before.copy(spacing = 1f)) shouldBe true
     }
@@ -33,7 +33,7 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("a font size change needs a redraw while indent is set, since indent is a multiple of it")
     fun fontSizeChangeWithIndentNeedsRedraw() {
-        val before = ParagraphShape(indent = 2f, spacing = 0f, fontSize = 16)
+        val before = ParagraphShape(indent = 2f, spacing = 0f, fontSize = 16, bionic = false)
 
         before.needsRedrawFor(before.copy(fontSize = 24)) shouldBe true
     }
@@ -41,7 +41,7 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("a font size change needs a redraw while spacing is set")
     fun fontSizeChangeWithSpacingNeedsRedraw() {
-        val before = ParagraphShape(indent = 0f, spacing = 1f, fontSize = 16)
+        val before = ParagraphShape(indent = 0f, spacing = 1f, fontSize = 16, bionic = false)
 
         before.needsRedrawFor(before.copy(fontSize = 24)) shouldBe true
     }
@@ -49,7 +49,7 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("a font size change alone restyles, so the default reader does not re-parse per slider step")
     fun fontSizeChangeWithoutSpansRestyles() {
-        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16)
+        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16, bionic = false)
 
         before.needsRedrawFor(before.copy(fontSize = 24)) shouldBe false
     }
@@ -57,8 +57,24 @@ class ParagraphShapeTest {
     @Test
     @DisplayName("clearing both while the size also changes still needs the redraw that removes the spans")
     fun clearingSpansNeedsRedraw() {
-        val before = ParagraphShape(indent = 2f, spacing = 1f, fontSize = 16)
+        val before = ParagraphShape(indent = 2f, spacing = 1f, fontSize = 16, bionic = false)
 
-        before.needsRedrawFor(ParagraphShape(indent = 0f, spacing = 0f, fontSize = 24)) shouldBe true
+        before.needsRedrawFor(ParagraphShape(indent = 0f, spacing = 0f, fontSize = 24, bionic = false)) shouldBe true
+    }
+
+    @Test
+    @DisplayName("turning bionic reading on needs a redraw, since its emphasis is spans built with the text")
+    fun bionicToggleNeedsRedraw() {
+        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16, bionic = false)
+
+        before.needsRedrawFor(before.copy(bionic = true)) shouldBe true
+    }
+
+    @Test
+    @DisplayName("turning bionic reading off needs the redraw that removes its spans")
+    fun bionicOffNeedsRedraw() {
+        val before = ParagraphShape(indent = 0f, spacing = 0f, fontSize = 16, bionic = true)
+
+        before.needsRedrawFor(before.copy(bionic = false)) shouldBe true
     }
 }

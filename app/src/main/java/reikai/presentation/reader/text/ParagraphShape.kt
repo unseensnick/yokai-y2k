@@ -1,15 +1,16 @@
 package reikai.presentation.reader.text
 
 /**
- * The values the paragraph spans are measured from when a chapter is built.
+ * The values the chapter's spans are built from, paragraph shape and bionic emphasis alike.
  *
- * Indent and spacing become pixels at build time, so neither they nor a size they are a multiple of
- * can be restyled into a view afterwards: the chapter has to be drawn again.
+ * Indent and spacing become pixels at build time and bionic emphasis becomes bold spans, so none of
+ * them can be restyled into a view afterwards: the chapter has to be drawn again.
  */
 data class ParagraphShape(
     val indent: Float,
     val spacing: Float,
     val fontSize: Int,
+    val bionic: Boolean,
 ) {
 
     /**
@@ -20,7 +21,7 @@ data class ParagraphShape(
      * restyles the views it already has instead of re-parsing the chapter per step.
      */
     fun needsRedrawFor(next: ParagraphShape): Boolean {
-        if (indent != next.indent || spacing != next.spacing) return true
+        if (indent != next.indent || spacing != next.spacing || bionic != next.bionic) return true
         val measuredAgainstSize = next.indent > 0f || next.spacing > 0f
         return measuredAgainstSize && fontSize != next.fontSize
     }

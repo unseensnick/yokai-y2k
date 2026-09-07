@@ -39,6 +39,7 @@ class NovelTextRenderer(
         paragraphSpacing: Float,
         paragraphIndent: Float,
         selectable: Boolean,
+        bionic: Boolean,
         /** The chapter's own site, sent as the Referer for an image some hosts would otherwise refuse. */
         refererUrl: String?,
         onTextSet: () -> Unit,
@@ -73,6 +74,7 @@ class NovelTextRenderer(
                 SpannableStringBuilder(spanned)
                     .also { collapseBlankLines(it) }
                     .also { NovelChapterLinks.apply(it, context) }
+                    .also { if (bionic) NovelBionicSpans.apply(it) }
             }
 
             val spacingPx = (paragraphSpacing * fontSize * density).toInt()

@@ -110,6 +110,9 @@ class NovelReaderProvider(
             return NovelTextViewport(
                 context = host,
                 textSelectable = novelPreferences.readerTextSelectable().get(),
+                volumeKeysEnabled = settings.useVolumeButtons,
+                volumeKeysInverted = settings.volumeButtonsInverted,
+                volumeKeyScrollFraction = settings.volumeButtonsFraction,
                 onProgressChanged = viewModel::reportProgress,
                 onProgressSettled = viewModel::saveProgress,
                 onToggleMenu = host::toggleMenu,

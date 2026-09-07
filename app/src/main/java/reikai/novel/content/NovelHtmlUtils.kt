@@ -64,6 +64,24 @@ object NovelHtmlUtils {
         Regex("<audio[^>]*>.*?</audio>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     private val sourceTagRegex = Regex("<source[^>]*>", RegexOption.IGNORE_CASE)
 
+    private val paddingEntityRegex = Regex("(?:&nbsp;\\s*|[\\u200b]\\s*)+(?=</?p[> ])", RegexOption.IGNORE_CASE)
+    private val breakRunRegex = Regex("<br>\\s*<br>\\s*(?:<br>\\s*)+", RegexOption.IGNORE_CASE)
+    private val breakBesideParagraphRegex =
+        Regex("<br>\\s*<br>\\s*(?=</?p[> ])|(?<=</?p>)\\s*<br>\\s*<br>\\s*", RegexOption.IGNORE_CASE)
+    private val loneBreakBesideParagraphRegex =
+        Regex("<br>\\s*(?=</?p[> ])|(?<=</?p>)\\s*<br>\\s*", RegexOption.IGNORE_CASE)
+
+    /**
+     * Sources pad chapters with blank paragraphs and stacked line breaks, which read as gaps the
+     * paragraph-spacing setting is then measured on top of. Ported from the vendored `core.js` so it
+     * runs for every rendering mode instead of only the one that ships a JS engine.
+     */
+    fun removeExtraParagraphSpacing(content: String): String = content
+        .replace(paddingEntityRegex, "")
+        .replace(breakRunRegex, "<br><br>")
+        .replace(breakBesideParagraphRegex, "")
+        .replace(loneBreakBesideParagraphRegex, "")
+
     fun isPlainTextChapter(chapterUrl: String?): Boolean {
         val ext = extensionFor(chapterUrl)
         return ext == "txt" || ext == "text"

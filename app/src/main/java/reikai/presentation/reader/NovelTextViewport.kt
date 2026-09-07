@@ -36,6 +36,9 @@ class NovelTextViewport(
     private val context: Context,
     /** Selection and clickable links are exclusive: the movement method that drags cannot click. */
     private val textSelectable: Boolean,
+    private val volumeKeysEnabled: Boolean,
+    private val volumeKeysInverted: Boolean,
+    private val volumeKeyScrollFraction: Float,
     private val onProgressChanged: (Int) -> Unit,
     private val onProgressSettled: (Int) -> Unit,
     private val onToggleMenu: () -> Unit,
@@ -160,6 +163,7 @@ class NovelTextViewport(
             paragraphSpacing = settings.paragraphSpacing,
             paragraphIndent = settings.paragraphIndent,
             selectable = textSelectable,
+            bionic = settings.bionicReading,
             refererUrl = chapter.baseUrl?.let { it.trimEnd('/') + "/" },
             onTextSet = ::applyPendingProgress,
         )
@@ -186,7 +190,20 @@ class NovelTextViewport(
         loaded = null
     }
 
-    override fun handleKeyEvent(event: KeyEvent): Boolean = false
+    /** The same contract [NovelWebViewport] answers, so a volume press behaves the same in either. */
+    override fun handleKeyEvent(event: KeyEvent): Boolean {
+        val isVolumeKey = event.keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+            event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+        if (!volumeKeysEnabled || !isVolumeKey) return false
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val forward = (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) != volumeKeysInverted
+            val fraction = volumeKeyScrollFraction.coerceIn(0.1f, 1f)
+            val step = (recycler.height * fraction).roundToInt()
+            recycler.smoothScrollBy(0, if (forward) step else -step)
+        }
+        // Consume the key-up too, so the system volume UI never shows during a press.
+        return true
+    }
 
     override fun handleGenericMotionEvent(event: MotionEvent): Boolean = false
 
@@ -273,4 +290,4 @@ class NovelTextViewport(
 }
 
 private fun NovelReaderSettings.paragraphShape() =
-    ParagraphShape(paragraphIndent, paragraphSpacing, fontSize)
+    ParagraphShape(paragraphIndent, paragraphSpacing, fontSize, bionicReading)

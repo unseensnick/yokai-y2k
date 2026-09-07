@@ -4,10 +4,10 @@ import androidx.annotation.WorkerThread
 import reikai.domain.novel.NovelPreferences
 
 /**
- * Stage order is user-visible and fixed: strip title, normalize, regex replacements, lowercase,
- * auto-split, translate, sanitize. Each stage sees what the previous one produced (a regex rule
- * matches post-normalization markup, auto-split counts words after those rules ran), so reordering
- * changes the rendered output for some chapters.
+ * Stage order is user-visible and fixed: strip title, normalize, remove extra spacing, regex
+ * replacements, lowercase, auto-split, translate, sanitize. Each stage sees what the previous one
+ * produced (a regex rule matches post-normalization markup, auto-split counts words after those
+ * rules ran), so reordering changes the rendered output for some chapters.
  */
 class NovelContentPipeline(private val preferences: NovelPreferences) {
 
@@ -30,6 +30,12 @@ class NovelContentPipeline(private val preferences: NovelPreferences) {
             NovelHtmlUtils.normalizePlainTextContent(content)
         } else {
             NovelHtmlUtils.normalizeContentForHtml(content, config.chapterUrl)
+        }
+
+        // Before the user's own rules, so a rule matches the markup they can see rather than the
+        // padding a source happened to ship.
+        if (config.removeExtraSpacing && !plainTextMode) {
+            content = NovelHtmlUtils.removeExtraParagraphSpacing(content)
         }
 
         content = NovelRegexReplacements.apply(content, preferences)

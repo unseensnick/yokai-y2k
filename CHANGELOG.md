@@ -87,6 +87,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Manga pages can now be drawn by a new high quality renderer, switched on under Settings -> Advanced (synced from Mihon, mihonapp/mihon#3388).** It brings dual page view, page transition animations, a display cutout mode, and a Min width slider that sets how much of the screen a long strip fills.
 - **Text in the native novel reader can now be selected, copied and shared, switched on under Settings -> Novel reader.** Links stop responding to taps while it is on, so the two are a choice rather than both at once.
 - **Font, line spacing and text alignment are now under Settings -> Novel reader, so the new readers can set them.** They only had controls in the original reader, which meant switching rendering mode left your font stuck where it was.
+- **Bionic reading, Remove extra spacing and volume-key scrolling now work in the native novel reader.** All three toggled but did nothing there, because only the WebView readers had anything behind them.
 
 **App**
 
