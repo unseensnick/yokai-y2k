@@ -7,9 +7,10 @@ import reikai.presentation.reader.readerLightPreset
 import reikai.presentation.reader.readerThemePresets
 
 /**
- * Resolved reader display settings fed to the WebView (the LNReader `ChapterReaderSettings` subset
- * the web layer reads). [followSystemTheme] is carried so the settings sheet can show the "Auto"
- * state; [NovelReaderScreen] resolves it into the effective [backgroundColor]/[textColor] before render.
+ * Resolved reader display settings, read by every rendering mode: the WebView paths take the LNReader
+ * `ChapterReaderSettings` subset, the native renderer styles its text views off the same fields.
+ * [followSystemTheme] is carried only so a sheet can show the "Auto" state; it is already resolved
+ * into [backgroundColor] and [textColor] by the time a renderer sees it.
  */
 data class NovelReaderSettings(
     val fontSize: Int,

@@ -315,8 +315,7 @@ class NovelPreferences(
      *  this at 20, so a smaller value does not shred the text. */
     fun readerAutoSplitWordCount() = preferenceStore.getInt("ln_reader_auto_split_word_count", 50)
 
-    /** User find/replace rules, a JSON array of [reikai.novel.content.NovelRegexReplacement]. No editor
-     *  UI yet, so this stays at its empty default and the pipeline stage is a no-op. */
+    /** User find/replace rules, a JSON array of [reikai.novel.content.NovelRegexReplacement]. */
     fun readerRegexReplacements() = preferenceStore.getString("ln_reader_regex_replacements", "[]")
 
     // Library.

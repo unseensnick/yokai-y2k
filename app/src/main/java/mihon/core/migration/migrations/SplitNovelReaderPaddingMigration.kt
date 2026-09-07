@@ -16,8 +16,8 @@ import tachiyomi.core.common.util.system.logcat
  * Carries a customised novel-reader page padding into the four margins that replaced it.
  *
  * The old single value set all four edges, so copying it to each keeps the page looking exactly as it
- * did. A reader who never moved the slider has nothing stored and keeps the new defaults, which are
- * the same number anyway.
+ * did. An untouched install has nothing stored and takes the new defaults, which differ on the top
+ * edge (50 against the old 16), so only a customised page is carried across unchanged.
  */
 @Inject
 @ContributesIntoSet(AppScope::class)

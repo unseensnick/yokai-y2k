@@ -105,10 +105,11 @@ class NovelReaderProvider(
     override fun setKeepScreenOn(enabled: Boolean) = viewModel.setKeepScreenOn(enabled)
 
     /**
-     * The volume-key values are read once, here, because the viewport takes them as plain values so it
-     * can be built without the graph. Nothing rebuilds a novel viewport mid-session (the host builds it
-     * in `onCreate`, and the rebuild path hangs off the manga collector), so a change to them lands on
-     * the next open.
+     * The volume-key values and text-selectability are read once here, because the viewport takes them
+     * as plain values so it can be built without the graph. Nothing rebuilds a novel viewport
+     * mid-session, so a change lands on the next open. That is only acceptable while none of them is
+     * reachable from the in-reader sheet: putting one there needs a viewport rebuild, and for
+     * text-selectability also a re-bind, since it decides which of the two tap owners is installed.
      */
     override fun createViewport(host: ReaderActivity): ReaderViewport {
         val settings = viewModel.settings.value

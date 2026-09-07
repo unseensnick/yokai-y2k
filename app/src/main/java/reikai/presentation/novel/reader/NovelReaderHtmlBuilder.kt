@@ -29,12 +29,12 @@ data class ReaderThemeColors(
 )
 
 /**
- * Build the reader document for a single chapter: the `#LNReader-chapter` scaffold, the `:root`
- * settings and theme CSS variables, the injected `initialReaderConfig`, and the bundled `index.css`
- * plus `core.js`. The in-page chrome (`index.js` ToolWrapper, scrollbar, buttons) and its CSS are
- * deliberately NOT loaded: every piece of chrome is Compose, and only the text canvas lives in the
- * WebView. The native bridge replaces upstream's react-native-webview `postMessage` with a shim
- * forwarding to `NativeReader`, so the vendored `core.js` stays byte-identical to upstream.
+ * Builds the reader document for one chapter: the `#LNReader-chapter` scaffold, the `:root` settings
+ * and theme variables, `initialReaderConfig`, and the bundled `index.css` plus `core.js`. The in-page
+ * chrome (`index.js` ToolWrapper, scrollbar, buttons) is deliberately not loaded, because every piece
+ * of chrome is Compose and only the text canvas lives in the WebView. The bridge shims upstream's
+ * react-native-webview `postMessage` onto `NativeReader`; `core.js` is otherwise upstream's, save one
+ * `// RK` island that a re-vendor must carry or user fonts silently stop resolving.
  */
 fun buildReaderHtml(
     chapterHtml: String,
