@@ -1,5 +1,10 @@
 package reikai.novel.source
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRenderingMode
 import reikai.domain.novel.NovelRepository
@@ -28,6 +33,42 @@ class NovelChapterTextLoader(
 ) {
 
     private val pipeline = NovelContentPipeline(preferences)
+
+    /**
+     * Emits when a setting that changes what [load] produces changes. A session caches pipeline output
+     * per chapter, so without re-running it a flipped switch reaches the page only on the next open.
+     *
+     * A snapshot rather than a count of emissions: `changes()` fires once on subscribe, and dropping a
+     * fixed number of those breaks silently the day a setting is added here.
+     */
+    val settingsChanged: Flow<Unit> = listOf<Flow<Any?>>(
+        preferences.readerHideChapterTitle().changes(),
+        preferences.readerForceLowercase().changes(),
+        preferences.readerBlockMedia().changes(),
+        preferences.readerRemoveExtraSpacing().changes(),
+        preferences.readerKeepEmbeddedCss().changes(),
+        preferences.readerKeepEmbeddedJs().changes(),
+        preferences.readerAutoSplitText().changes(),
+        preferences.readerAutoSplitWordCount().changes(),
+        preferences.readerRegexReplacements().changes(),
+    )
+        .merge()
+        .map { pipelineSnapshot() }
+        .distinctUntilChanged()
+        .drop(1)
+        .map { }
+
+    private fun pipelineSnapshot(): List<Any?> = listOf(
+        preferences.readerHideChapterTitle().get(),
+        preferences.readerForceLowercase().get(),
+        preferences.readerBlockMedia().get(),
+        preferences.readerRemoveExtraSpacing().get(),
+        preferences.readerKeepEmbeddedCss().get(),
+        preferences.readerKeepEmbeddedJs().get(),
+        preferences.readerAutoSplitText().get(),
+        preferences.readerAutoSplitWordCount().get(),
+        preferences.readerRegexReplacements().get(),
+    )
 
     private val sourcesByNovel: MutableMap<Long, NovelSource> =
         Collections.synchronizedMap(HashMap())

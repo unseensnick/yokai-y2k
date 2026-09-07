@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
 import reikai.domain.library.ReikaiLibraryPreferences
@@ -376,6 +378,14 @@ class NovelReaderViewModel(
                 entryTitle.value = it.title
             }
         }
+        // The cache holds pipeline output, so a chapter-text setting reaches the open chapter and the
+        // prefetched next one only by dropping both and running it again.
+        textLoader.settingsChanged
+            .onEach {
+                htmlCache.clear()
+                load()
+            }
+            .launchIn(viewModelScope)
         load()
     }
 

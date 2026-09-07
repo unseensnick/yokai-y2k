@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import reikai.domain.category.GetNovelCategories
 import reikai.domain.library.ReikaiLibraryPreferences
@@ -354,6 +356,14 @@ class NovelReaderScreenModel(
         screenModelScope.launchIO {
             novelRepo.getById(novelId)?.let { orientationOverride.value = it.readerOrientation.toInt() }
         }
+        // The cache holds pipeline output, so a chapter-text setting reaches the open chapter and the
+        // prefetched next one only by dropping both and running it again.
+        textLoader.settingsChanged
+            .onEach {
+                htmlCache.clear()
+                load()
+            }
+            .launchIn(screenModelScope)
         load()
     }
 
