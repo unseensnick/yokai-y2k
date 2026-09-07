@@ -122,6 +122,9 @@ class NovelReaderProvider(
                 onProgressChanged = viewModel::reportProgress,
                 onProgressSettled = viewModel::saveProgress,
                 onToggleMenu = host::toggleMenu,
+                onStepChapter = { forward ->
+                    if (forward) host.engine.nextChapter() else host.engine.previousChapter()
+                },
             )
         }
         return NovelWebViewport(

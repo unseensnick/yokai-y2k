@@ -26,6 +26,7 @@ import reikai.presentation.reader.text.LinkOnlyMovementMethod
 import reikai.presentation.reader.text.NovelTextRenderer
 import reikai.presentation.reader.text.NovelTextStyle
 import reikai.presentation.reader.text.ParagraphShape
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -44,6 +45,8 @@ class NovelTextViewport(
     private val onProgressChanged: (Int) -> Unit,
     private val onProgressSettled: (Int) -> Unit,
     private val onToggleMenu: () -> Unit,
+    /** Swipe-between-chapters, forward or back, the same contract [NovelWebViewport] takes. */
+    private val onStepChapter: (forward: Boolean) -> Unit,
 ) : ReaderViewport, TextViewport {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -94,8 +97,10 @@ class NovelTextViewport(
         }
     }
 
-    /** Where the last touch went down, in viewport coordinates, so a click knows which zone it hit. */
-    private var lastTapY = 0f
+    /** Where the touch went down, in viewport coordinates: a click carries no position of its own, and
+     *  a swipe is measured from here. */
+    private var touchDownX = 0f
+    private var touchDownY = 0f
 
     /** Only consulted for selectable text, where the Editor takes the touch and no click follows. */
     private val selectableTaps = GestureDetector(
@@ -117,7 +122,13 @@ class NovelTextViewport(
      */
     private val tapWatcher = object : RecyclerView.OnItemTouchListener {
         override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-            if (e.actionMasked == MotionEvent.ACTION_DOWN) lastTapY = e.y
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchDownX = e.x
+                    touchDownY = e.y
+                }
+                MotionEvent.ACTION_UP -> onPointerUp(e.x, e.y)
+            }
             if (textSelectable) selectableTaps.onTouchEvent(e)
             return false
         }
@@ -312,6 +323,22 @@ class NovelTextViewport(
     }
 
     /**
+     * A swipe between chapters, at `core.js`'s thresholds so the gesture behaves the same in either
+     * renderer: mostly sideways, far enough not to be a stray, and started on the half it moves away
+     * from, which is what makes it cross the middle rather than flick in a corner.
+     */
+    private fun onPointerUp(x: Float, y: Float) {
+        if (settings?.swipeGestures != true) return
+        val dx = x - touchDownX
+        val dy = y - touchDownY
+        val minimum = SWIPE_MIN_DP * context.resources.displayMetrics.density
+        if (abs(dx) < minimum || abs(dx) < abs(dy) * 2) return
+        val middle = recycler.width / 2f
+        if (dx < 0 && touchDownX >= middle) onStepChapter(true)
+        if (dx > 0 && touchDownX <= middle) onStepChapter(false)
+    }
+
+    /**
      * Zero rather than a hundred while the range is unknown. The recycler reports no scroll range
      * until the text is measured, and reporting completion there would mark the chapter read and
      * retire its download before it had been seen. A chapter genuinely shorter than the screen also
@@ -349,7 +376,7 @@ class NovelTextViewport(
             // every tap: the Editor swallows a click on the text but not one past its last line.
             // Without selection the click is the owner instead, because LinkOnlyMovementMethod
             // declines a tap that is not on a link and only then lets it through to here.
-            if (!textSelectable) setOnClickListener { onTap(lastTapY) }
+            if (!textSelectable) setOnClickListener { onTap(touchDownY) }
             // Off on both branches: the click is dispatched by the movement method below, so leaving
             // it on would let the framework fire its own unchecked intent for the same tap.
             linksClickable = false
@@ -387,7 +414,7 @@ class NovelTextViewport(
             val container = shown?.container ?: return
             (container.parent as? ViewGroup)?.removeView(container)
             holder.root.addView(container)
-            if (!textSelectable) holder.root.setOnClickListener { onTap(lastTapY) }
+            if (!textSelectable) holder.root.setOnClickListener { onTap(touchDownY) }
         }
 
         override fun getItemCount(): Int = if (shown == null) 0 else 1
@@ -400,6 +427,9 @@ class NovelTextViewport(
 
         /** A tap in an outer zone moves by this much of the screen, matching `core.js`. */
         const val TAP_SCROLL_FRACTION = 0.75f
+
+        /** How far sideways a swipe must run to count, in dp, also `core.js`'s number. */
+        const val SWIPE_MIN_DP = 180f
     }
 }
 
