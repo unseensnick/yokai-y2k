@@ -31,6 +31,8 @@ import reikai.domain.novel.model.effectiveReadFilter
 import reikai.domain.novel.model.readerOrientation
 import reikai.domain.novel.model.readingOrderComparator
 import reikai.domain.novel.track.TrackNovelChapter
+import reikai.domain.reader.ChapterProgress
+import reikai.domain.reader.isChapterComplete
 import reikai.domain.reader.neighbourChapter
 import reikai.domain.reader.removeDuplicateChapters
 import reikai.novel.download.NovelDownload
@@ -662,7 +664,7 @@ class NovelReaderScreenModel(
             chapterRepo.setLastTextProgress(id, clamped * 100L)
             // Stamp the owning novel's last-read time so the LastRead library sort reflects this read.
             novelRepo.setLastReadAt(currentNovelId, System.currentTimeMillis())
-            if (clamped >= 97) {
+            if (ChapterProgress.Percent(hundredths = clamped * 100L).isChapterComplete) {
                 // Fetch before marking so the shared interactor sees the chapter as still unread; it flips
                 // read + honors "delete after marked as read" (the in-RAM htmlCache keeps this view alive).
                 val chapter = chapterRepo.getById(id)

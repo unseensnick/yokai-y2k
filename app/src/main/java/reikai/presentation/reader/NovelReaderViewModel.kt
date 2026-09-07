@@ -49,6 +49,8 @@ import reikai.domain.novel.model.effectiveReadFilter
 import reikai.domain.novel.model.readerOrientation
 import reikai.domain.novel.model.readingOrderComparator
 import reikai.domain.novel.track.TrackNovelChapter
+import reikai.domain.reader.ChapterProgress
+import reikai.domain.reader.isChapterComplete
 import reikai.domain.reader.neighbourChapter
 import reikai.domain.reader.removeDuplicateChapters
 import reikai.novel.download.NovelDownload
@@ -313,7 +315,7 @@ class NovelReaderViewModel(
         pendingSave = id to clamped
         progressSaveJob?.cancel()
         // Finishing carries mark-as-read, the sibling marking and the tracker push, so it never waits.
-        if (clamped >= COMPLETE_PERCENT) {
+        if (clamped.completesChapter()) {
             flushProgress()
             return
         }
@@ -466,7 +468,7 @@ class NovelReaderViewModel(
             chapterRepo.setLastTextProgress(id, clamped * 100L)
             // Stamp the owning novel's last-read time so the LastRead library sort reflects this read.
             novelRepo.setLastReadAt(currentNovelId, System.currentTimeMillis())
-            if (clamped >= COMPLETE_PERCENT) {
+            if (clamped.completesChapter()) {
                 // Fetch before marking so the shared interactor sees the chapter as still unread; it flips
                 // read + honors "delete after marked as read".
                 val chapter = chapterRepo.getById(id)
@@ -888,5 +890,7 @@ private const val MAX_CACHED_CHAPTERS = 5
  *  database on every whole percent. */
 private const val PROGRESS_SAVE_DEBOUNCE_MS = 500L
 
-/** Where a continuously scrolled chapter counts as read. */
-private const val COMPLETE_PERCENT = 97
+/** The shared completion rule, asked in the whole percent this reader reports in, so the threshold
+ *  lives only in [ChapterProgress] and cannot drift from the manga side. */
+private fun Int.completesChapter(): Boolean =
+    ChapterProgress.Percent(hundredths = this * 100L).isChapterComplete
