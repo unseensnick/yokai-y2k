@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.text.SpannableStringBuilder
 import android.text.method.ArrowKeyMovementMethod
 import android.view.Choreographer
+import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -93,6 +94,39 @@ class NovelTextViewport(
         }
     }
 
+    /** Where the last touch went down, in viewport coordinates, so a click knows which zone it hit. */
+    private var lastTapY = 0f
+
+    /** Only consulted for selectable text, where the Editor takes the touch and no click follows. */
+    private val selectableTaps = GestureDetector(
+        context,
+        object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                onTap(e.y)
+                return false
+            }
+        },
+    )
+
+    /**
+     * Taps are watched above the children rather than taken from them. A selectable TextView hands
+     * its touches to the Editor and fires no click at all, so turning text selection on left the
+     * chrome unreachable; and a click carries no coordinate for the tap zones to read.
+     * Never consumes, so selection dragging and link taps still reach the text underneath.
+     * Declared above the recycler that registers it, or it is null when that runs.
+     */
+    private val tapWatcher = object : RecyclerView.OnItemTouchListener {
+        override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+            if (e.actionMasked == MotionEvent.ACTION_DOWN) lastTapY = e.y
+            if (textSelectable) selectableTaps.onTouchEvent(e)
+            return false
+        }
+
+        override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) = Unit
+
+        override fun onRequestDisallowInterceptTouchEvent(disallow: Boolean) = Unit
+    }
+
     private val recycler = RecyclerView(context).apply {
         layoutManager = LinearLayoutManager(context)
         adapter = this@NovelTextViewport.adapter
@@ -105,6 +139,7 @@ class NovelTextViewport(
                 if (state == RecyclerView.SCROLL_STATE_IDLE) onProgressSettled(percent())
             }
         })
+        addOnItemTouchListener(tapWatcher)
         if (textSelectable) addOnAttachStateChangeListener(focusableWhileAttached)
     }
 
@@ -256,6 +291,27 @@ class NovelTextViewport(
     override fun handleGenericMotionEvent(event: MotionEvent): Boolean = false
 
     /**
+     * The tap zones, at `core.js`'s thirds and its three-quarter-screen step, so a tap does the same
+     * thing whichever renderer is running. The middle band, and every tap while the setting is off,
+     * toggles the chrome. Read from the live settings, so switching it takes effect at once.
+     */
+    private fun onTap(y: Float) {
+        val height = recycler.height
+        if (settings?.tapToScroll == true && height > 0) {
+            val step = (height * TAP_SCROLL_FRACTION).roundToInt()
+            if (y < height / 3f) {
+                recycler.smoothScrollBy(0, -step)
+                return
+            }
+            if (y > height * 2f / 3f) {
+                recycler.smoothScrollBy(0, step)
+                return
+            }
+        }
+        onToggleMenu()
+    }
+
+    /**
      * Zero rather than a hundred while the range is unknown. The recycler reports no scroll range
      * until the text is measured, and reporting completion there would mark the chapter read and
      * retire its download before it had been seen. A chapter genuinely shorter than the screen also
@@ -289,10 +345,11 @@ class NovelTextViewport(
             )
             NovelTextStyle.apply(this, settings, context)
             setTextIsSelectable(textSelectable)
-            // The chunk views cover the whole chapter, so a tap on the text never reaches the item
-            // view underneath. LinkOnlyMovementMethod declines a tap that is not on a link, which is
-            // what lets the click through to here.
-            setOnClickListener { onToggleMenu() }
+            // Selectable text has one tap owner, the watcher, so a click listener here would double
+            // every tap: the Editor swallows a click on the text but not one past its last line.
+            // Without selection the click is the owner instead, because LinkOnlyMovementMethod
+            // declines a tap that is not on a link and only then lets it through to here.
+            if (!textSelectable) setOnClickListener { onTap(lastTapY) }
             // Off on both branches: the click is dispatched by the movement method below, so leaving
             // it on would let the framework fire its own unchecked intent for the same tap.
             linksClickable = false
@@ -330,7 +387,7 @@ class NovelTextViewport(
             val container = shown?.container ?: return
             (container.parent as? ViewGroup)?.removeView(container)
             holder.root.addView(container)
-            holder.root.setOnClickListener { onToggleMenu() }
+            if (!textSelectable) holder.root.setOnClickListener { onTap(lastTapY) }
         }
 
         override fun getItemCount(): Int = if (shown == null) 0 else 1
@@ -340,6 +397,9 @@ class NovelTextViewport(
         /** The frame rate the WebView renderer's per-frame speed was written against. */
         const val FRAMES_PER_SECOND = 60f
         const val NANOS_PER_SECOND = 1_000_000_000f
+
+        /** A tap in an outer zone moves by this much of the screen, matching `core.js`. */
+        const val TAP_SCROLL_FRACTION = 0.75f
     }
 }
 
