@@ -42,6 +42,17 @@ object NovelTextStyle {
         applyAlignment(view, settings.textAlign)
     }
 
+    /** The page's side margins, for something that is not a chunk view and so misses [apply]'s. */
+    fun applySideMargins(view: View, settings: NovelReaderSettings, context: Context) {
+        val density = context.resources.displayMetrics.density
+        view.setPadding(
+            (settings.margins.left * density).toInt(),
+            view.paddingTop,
+            (settings.margins.right * density).toInt(),
+            view.paddingBottom,
+        )
+    }
+
     /** The ends of the page, applied once to the column that holds the chunks. */
     fun applyMargins(container: View, settings: NovelReaderSettings, context: Context) {
         val density = context.resources.displayMetrics.density

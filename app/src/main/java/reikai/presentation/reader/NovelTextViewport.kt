@@ -11,7 +11,9 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -27,6 +29,7 @@ import reikai.presentation.novel.reader.NovelReaderSettings
 import reikai.presentation.reader.text.ChapterScrollProgress
 import reikai.presentation.reader.text.ChapterTextBlock
 import reikai.presentation.reader.text.LinkOnlyMovementMethod
+import reikai.presentation.reader.text.NovelChapterSeamView
 import reikai.presentation.reader.text.NovelTextRenderer
 import reikai.presentation.reader.text.NovelTextStyle
 import reikai.presentation.reader.text.ParagraphShape
@@ -456,8 +459,8 @@ class NovelTextViewport(
      */
     private fun percentOf(slot: ChapterSlot): Int {
         if (!slot.rendered) return 0
-        val view = viewOf(slot) ?: return 0
-        val fraction = ChapterScrollProgress.fractionOf(view.top, view.height, recycler.height)
+        val (top, height) = boundsOf(slot) ?: return 0
+        val fraction = ChapterScrollProgress.fractionOf(top, height, recycler.height)
         return (fraction * 100f).roundToInt().coerceIn(0, 100)
     }
 
@@ -477,19 +480,27 @@ class NovelTextViewport(
         return slots.getOrNull(position)
     }
 
-    /** Null until the recycler has laid this chapter out, and again once it scrolls out of the window. */
-    private fun viewOf(slot: ChapterSlot): View? {
+    /**
+     * Where this chapter's text sits in the viewport, and how tall it is. The item view is not the
+     * answer: it also holds the seam marker above the text, and counting that would have the reader
+     * a few percent into a chapter before its first line.
+     *
+     * Null until the recycler has laid this chapter out, and again once it scrolls out of the window.
+     */
+    private fun boundsOf(slot: ChapterSlot): Pair<Int, Int>? {
         val position = slots.indexOf(slot).takeIf { it >= 0 } ?: return null
-        return recycler.layoutManager?.findViewByPosition(position)
+        val item = recycler.layoutManager?.findViewByPosition(position) ?: return null
+        val text = slot.block.container
+        return (item.top + text.top) to text.height
     }
 
     /** Puts the reader [fraction] of the way through [slot]. False when there is nothing to seek
      *  within yet, which is that chapter's own height rather than the whole list's. */
     private fun scrollWithin(slot: ChapterSlot, fraction: Float): Boolean {
-        val view = viewOf(slot) ?: return false
-        if (view.height <= recycler.height) return false
-        val target = ChapterScrollProgress.offsetFor(fraction, view.height, recycler.height)
-        recycler.scrollBy(0, target + view.top)
+        val (top, height) = boundsOf(slot) ?: return false
+        if (height <= recycler.height) return false
+        val target = ChapterScrollProgress.offsetFor(fraction, height, recycler.height)
+        recycler.scrollBy(0, target + top)
         return true
     }
 
@@ -559,23 +570,37 @@ class NovelTextViewport(
             override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int) = true
         }
 
-        inner class Holder(val root: ViewGroup) : RecyclerView.ViewHolder(root)
+        /** The seam marker sits above the chapter rather than between two items, so a position still
+         *  names a chapter and the geometry stays a chapter's own bounds. */
+        inner class Holder(val root: LinearLayout, val seam: NovelChapterSeamView) :
+            RecyclerView.ViewHolder(root)
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-            val root = android.widget.FrameLayout(parent.context).apply {
+            val seam = NovelChapterSeamView(parent.context)
+            val root = LinearLayout(parent.context).apply {
+                orientation = LinearLayout.VERTICAL
                 layoutParams = RecyclerView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 )
+                addView(seam)
             }
-            return Holder(root)
+            return Holder(root, seam)
         }
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
-            holder.root.removeAllViews()
+            while (holder.root.childCount > 1) holder.root.removeViewAt(1)
             val container = shown.getOrNull(position)?.block?.container ?: return
             (container.parent as? ViewGroup)?.removeView(container)
             holder.root.addView(container)
+            // The first chapter in the window has nothing above it to have finished.
+            val finished = shown.getOrNull(position - 1)?.chapter
+            holder.seam.isVisible = finished != null
+            if (finished != null) {
+                // The side margins live on the chunk views, which the marker is not one of.
+                settings?.let { NovelTextStyle.applySideMargins(holder.seam, it, context) }
+                holder.seam.bind(finished.title, shown[position].chapter.title)
+            }
             if (!textSelectable) holder.root.setOnClickListener { onTap(touchDownY) }
         }
 

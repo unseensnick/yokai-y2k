@@ -44,6 +44,13 @@ import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 
+// RK --> the seam marker is named rather than typed, so the light-novel reader draws the same one
+/** What the marker names on either side of it, whichever kind of chapter it came from. */
+data class TransitionChapter(val name: String, val subtitle: String?)
+
+private fun Chapter.toTransitionChapter() = TransitionChapter(name = name, subtitle = scanlator)
+// RK <--
+
 @Composable
 fun ChapterTransition(
     transition: ChapterTransition,
@@ -58,10 +65,10 @@ fun ChapterTransition(
             is ChapterTransition.Prev -> {
                 TransitionText(
                     topLabel = stringResource(MR.strings.transition_previous),
-                    topChapter = goingToChapter,
+                    topChapter = goingToChapter?.toTransitionChapter(),
                     topChapterDownloaded = goingToChapterDownloaded,
                     bottomLabel = stringResource(MR.strings.transition_current),
-                    bottomChapter = currChapter,
+                    bottomChapter = currChapter?.toTransitionChapter(),
                     bottomChapterDownloaded = currChapterDownloaded,
                     fallbackLabel = stringResource(MR.strings.transition_no_previous),
                     chapterGap = calculateChapterGap(currChapter, goingToChapter),
@@ -70,10 +77,10 @@ fun ChapterTransition(
             is ChapterTransition.Next -> {
                 TransitionText(
                     topLabel = stringResource(MR.strings.transition_finished),
-                    topChapter = currChapter,
+                    topChapter = currChapter?.toTransitionChapter(),
                     topChapterDownloaded = currChapterDownloaded,
                     bottomLabel = stringResource(MR.strings.transition_next),
-                    bottomChapter = goingToChapter,
+                    bottomChapter = goingToChapter?.toTransitionChapter(),
                     bottomChapterDownloaded = goingToChapterDownloaded,
                     fallbackLabel = stringResource(MR.strings.transition_no_next),
                     chapterGap = calculateChapterGap(goingToChapter, currChapter),
@@ -83,13 +90,15 @@ fun ChapterTransition(
     }
 }
 
+// RK: public and neutral, called by both readers; nothing here was manga-specific but its two
+// chapter parameters, which the callers now map.
 @Composable
-private fun TransitionText(
+fun TransitionText(
     topLabel: String,
-    topChapter: Chapter?,
+    topChapter: TransitionChapter?,
     topChapterDownloaded: Boolean,
     bottomLabel: String,
-    bottomChapter: Chapter?,
+    bottomChapter: TransitionChapter?,
     bottomChapterDownloaded: Boolean,
     fallbackLabel: String,
     chapterGap: Int,
@@ -103,7 +112,7 @@ private fun TransitionText(
             ChapterText(
                 header = topLabel,
                 name = topChapter.name,
-                scanlator = topChapter.scanlator,
+                scanlator = topChapter.subtitle,
                 downloaded = topChapterDownloaded,
             )
 
@@ -128,7 +137,7 @@ private fun TransitionText(
             ChapterText(
                 header = bottomLabel,
                 name = bottomChapter.name,
-                scanlator = bottomChapter.scanlator,
+                scanlator = bottomChapter.subtitle,
                 downloaded = bottomChapterDownloaded,
             )
         } else {
