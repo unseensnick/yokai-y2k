@@ -37,6 +37,7 @@ import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelPreferences
+import reikai.domain.novel.NovelRenderingMode
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.interactor.DeleteNovelChaptersBehindReader
 import reikai.domain.novel.interactor.SetNovelReadStatus
@@ -283,7 +284,37 @@ class NovelReaderViewModel(
     internal val entryTitle = MutableStateFlow<String?>(null)
 
     private val loadedChapter = MutableStateFlow<LoadedChapter?>(null)
+
+    /**
+     * The chapter being read, which the renderer decides once it holds more than one: crossing a
+     * boundary changes this without any load. Everything a user sees named or acted on (the title,
+     * the bookmark, the web actions, the chapter list's mark) follows it rather than the load.
+     */
     val chapter: StateFlow<LoadedChapter?> = loadedChapter
+
+    private val windowState = MutableStateFlow(Window())
+
+    /**
+     * The chapters to render, in reading order: the one being read with a warmed neighbour on each
+     * side where there is one. A renderer that shows a chapter at a time ignores this and reads
+     * [chapter].
+     */
+    val window: StateFlow<Window> = windowState
+
+    /**
+     * [generation] rises on every explicit open, which is what tells a renderer to start over rather
+     * than grow: an open lands on [anchorId] wherever it was left, where a crossing keeps the reader
+     * exactly where the scroll put it. Without it the two are indistinguishable, since an open onto
+     * an already-warmed neighbour produces the same set of chapters as scrolling into it.
+     */
+    data class Window(
+        val generation: Int = 0,
+        val anchorId: Long = -1L,
+        val chapters: List<LoadedChapter> = emptyList(),
+    )
+
+    @Volatile
+    private var openGeneration = 0
 
     private val liveProgress = MutableStateFlow(0)
 
@@ -308,10 +339,21 @@ class NovelReaderViewModel(
      * Every scroll persists, debounced. Keying the write on a settle instead lost an auto-scrolled or
      * scrubbed read entirely, because those move the viewport without a touch to end.
      */
-    fun reportProgress(percent: Int) {
+    fun reportProgress(id: Long, percent: Int) {
         val clamped = percent.coerceIn(0, 100)
-        liveProgress.value = clamped
-        val id = loadedChapter.value?.chapterId ?: return
+        // A report for a chapter the window no longer holds is a straggler from a crossing, and
+        // writing it would move a position the reader has already left behind.
+        if (windowState.value.chapters.none { it.chapterId == id }) return
+        if (id == currentChapterId) liveProgress.value = clamped
+        // Written here rather than left to the crossing, which happens on its own coroutine: the very
+        // next report belongs to the arriving chapter and would otherwise land on the departed one.
+        val pending = pendingSave
+        if (pending != null && pending.first != id) {
+            progressSaveJob?.cancel()
+            pendingSave = null
+            lastSavedPercent = -1
+            persistProgress(pending.first, pending.second)
+        }
         if (clamped == lastSavedPercent) return
         lastSavedPercent = clamped
         pendingSave = id to clamped
@@ -400,6 +442,30 @@ class NovelReaderViewModel(
 
     fun previousChapter() = neighbours.value.previous?.let { goTo(it) } ?: Unit
 
+    /**
+     * The renderer scrolled into a different chapter of the window. Not a step: nothing is fetched
+     * and nothing is skipped, so `markReadOnSkip` stays out of it. The chapter being left keeps
+     * whatever the scroll already saved, which for a chapter read to its end is 100 and a mark-read.
+     */
+    fun reportVisibleChapter(chapterId: Long) {
+        if (chapterId == currentChapterId) return
+        val arriving = windowState.value.chapters.firstOrNull { it.chapterId == chapterId } ?: return
+        viewModelScope.launchIO {
+            flushProgress()
+            updateHistory()
+            currentChapterId = arriving.chapterId
+            currentNovelId = chapterRepo.getById(arriving.chapterId)?.novelId ?: currentNovelId
+            chapterReadStartTime = System.currentTimeMillis()
+            bookmarkedState.value = chapterRepo.getById(arriving.chapterId)?.bookmark ?: false
+            loadedChapter.value = arriving
+            lastSavedPercent = -1
+            // The window re-centres on where the reader now is, which warms the chapter beyond and
+            // lets the one two behind go.
+            resolveNeighbours()
+            rebuildWindow()
+        }
+    }
+
     private fun goTo(chapterId: Long, markDepartedRead: Boolean = false) {
         viewModelScope.launchIO {
             // The departed chapter is stamped into history before the switch, and marked read while it
@@ -434,20 +500,16 @@ class NovelReaderViewModel(
                 currentNovelId = row.novelId
                 chapterReadStartTime = System.currentTimeMillis()
                 bookmarkedState.value = row.bookmark
-                loadedChapter.value = LoadedChapter(
-                    chapterId = row.id,
-                    title = row.name,
-                    url = row.url,
-                    html = html,
-                    baseUrl = baseUrl,
-                    // Stored as 0..10000 (hundredths of a percent); the web layer wants 0..100.
-                    progressPercent = (row.lastTextProgress / 100).coerceIn(0L, 100L).toInt(),
-                ).also {
-                    liveProgress.value = it.progressPercent
-                    // The arriving chapter has saved nothing yet, so its first report must not be read
-                    // as a repeat of the chapter before it.
-                    lastSavedPercent = -1
-                }
+                val opened = row.toLoadedChapter(html, baseUrl)
+                loadedChapter.value = opened
+                liveProgress.value = opened.progressPercent
+                // The arriving chapter has saved nothing yet, so its first report must not be read
+                // as a repeat of the chapter before it.
+                lastSavedPercent = -1
+                // The neighbours are dropped rather than kept: an explicit open lands somewhere the
+                // old window does not surround, and a stale one would render around the wrong chapter.
+                openGeneration++
+                windowState.value = Window(openGeneration, opened.chapterId, listOf(opened))
                 resolveNeighbours()
                 loadState.value = ReaderLoadState.Idle
             } catch (e: Throwable) {
@@ -460,9 +522,19 @@ class NovelReaderViewModel(
         }
     }
 
+    /** Stored as 0..10000 (hundredths of a percent); a renderer wants 0..100. */
+    private fun NovelChapter.toLoadedChapter(html: String, baseUrl: String?) = LoadedChapter(
+        chapterId = id,
+        title = name,
+        url = url,
+        html = html,
+        baseUrl = baseUrl,
+        progressPercent = (lastTextProgress / 100).coerceIn(0L, 100L).toInt(),
+    )
+
     /** A renderer that knows its own scroll has settled, which the web layer reports on scrollend. */
-    fun saveProgress(percent: Int) {
-        val id = loadedChapter.value?.chapterId ?: return
+    fun saveProgress(id: Long, percent: Int) {
+        if (windowState.value.chapters.none { it.chapterId == id }) return
         val clamped = percent.coerceIn(0, 100)
         progressSaveJob?.cancel()
         pendingSave = null
@@ -785,33 +857,71 @@ class NovelReaderViewModel(
             }
     }
 
-    /** Re-resolves both neighbours, then warms the next chapter and queues the download-ahead window. */
+    /** Re-resolves both neighbours, then warms them and queues the download-ahead window. */
     private suspend fun resolveNeighbours() {
         val index = orderedIds.indexOf(currentChapterId)
         neighbours.value = Neighbours(
             previous = orderedIds.neighbourChapter(index, forward = false) { it in forwardEligibleIds },
             next = orderedIds.neighbourChapter(index, forward = true) { it in forwardEligibleIds },
         )
-        prefetchNext()
+        warmNeighbour(neighbours.value.next)
+        // Only the window scrolls backwards into a chapter, and the forward warm above already serves
+        // the next-chapter button, so this one is the only warm the setting decides.
+        if (windowedReading()) warmNeighbour(neighbours.value.previous)
         maybeDownloadAhead()
     }
 
-    /** One speculative request per chapter open, so a forward step is instant and the source is not hit
-     *  harder than a reader moving through it would. */
-    private fun prefetchNext() {
-        val nextId = neighbours.value.next ?: return
-        if (htmlCache.containsKey(nextId)) return
+    /**
+     * Whether the renderer holds more than one chapter, which decides how wide a window to publish.
+     * Reads the rendering mode as well as the setting, because the WebView renderers show a chapter
+     * at a time and would only pay for neighbours they cannot draw.
+     */
+    private fun windowedReading() = novelPreferences.readerSeamlessChapters().get() &&
+        novelPreferences.readerRenderingMode().get() == NovelRenderingMode.NATIVE
+
+    /**
+     * One speculative request per neighbour, so crossing into it needs no round trip and the source
+     * is not hit harder than a reader moving through it would. Backwards as well as forwards, because
+     * a window the reader can scroll up into has to already hold what is above.
+     */
+    private suspend fun warmNeighbour(chapterId: Long?) {
+        val id = chapterId ?: return
+        if (htmlCache.containsKey(id)) {
+            rebuildWindow()
+            return
+        }
         viewModelScope.launchIO {
             try {
-                val next = chapterRepo.getById(nextId) ?: return@launchIO
-                htmlCache[nextId] = loadChapterHtml(next)
+                val row = chapterRepo.getById(id) ?: return@launchIO
+                htmlCache[id] = loadChapterHtml(row)
+                rebuildWindow()
             } catch (e: Throwable) {
                 // A speculative fetch failing is not the reader's problem, but swallowing the
                 // cancellation would report a warm-up failure for a session that is gone.
                 if (e is CancellationException) throw e
-                logcat(LogPriority.WARN, e) { "Failed to prefetch novel chapter $nextId" }
+                logcat(LogPriority.WARN, e) { "Failed to prefetch novel chapter $id" }
             }
         }
+    }
+
+    /**
+     * Publishes the chapter being read with whichever neighbours are warmed, so the renderer's window
+     * follows the reader. Only warmed chapters go in: an entry the cache has dropped would otherwise
+     * need a fetch the renderer cannot wait for.
+     */
+    private suspend fun rebuildWindow() {
+        val current = loadedChapter.value ?: return
+        if (!windowedReading()) {
+            windowState.value = Window(openGeneration, current.chapterId, listOf(current))
+            return
+        }
+        val ids = listOfNotNull(neighbours.value.previous, current.chapterId, neighbours.value.next)
+        val chapters = ids.mapNotNull { id ->
+            if (id == current.chapterId) return@mapNotNull current
+            val (html, baseUrl) = htmlCache[id] ?: return@mapNotNull null
+            chapterRepo.getById(id)?.toLoadedChapter(html, baseUrl)
+        }
+        windowState.value = Window(openGeneration, current.chapterId, chapters)
     }
 
     /** Enqueues the next N un-downloaded chapters in reading order, the novel twin of manga's

@@ -46,12 +46,18 @@ class NovelTextViewport(
     private val volumeKeysEnabled: Boolean,
     private val volumeKeysInverted: Boolean,
     private val volumeKeyScrollFraction: Float,
-    private val onProgressChanged: (Int) -> Unit,
-    private val onProgressSettled: (Int) -> Unit,
+    /** Both carry the chapter measured, not just the number: at a boundary the reader is already in
+     *  the next chapter while the model still has the previous one, and an unnamed percentage lands
+     *  on whichever the model happens to hold. */
+    private val onProgressChanged: (chapterId: Long, percent: Int) -> Unit,
+    private val onProgressSettled: (chapterId: Long, percent: Int) -> Unit,
     private val onToggleMenu: () -> Unit,
     /** Swipe-between-chapters, forward or back, the same contract [NovelWebViewport] takes. */
     private val onStepChapter: (forward: Boolean) -> Unit,
-) : ReaderViewport, TextViewport {
+    /** Which chapter the reader is in, whenever that changes. The window is the only reason it can
+     *  differ from the one the model last opened. */
+    private val onVisibleChapter: (chapterId: Long) -> Unit,
+) : ReaderViewport, TextViewport, ChapterWindow {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val renderer = NovelTextRenderer(context, scope)
@@ -76,6 +82,9 @@ class NovelTextViewport(
         /** Before the text is set there is nothing to be a percentage of. */
         var rendered = false
     }
+
+    /** The last chapter announced, so a scroll that stays inside one says nothing. */
+    private var reportedVisibleId: Long? = null
 
     /** Auto-scroll in pixels a second, zero when it is off. Carry and timestamp belong to the frame
      *  callback below and are held here so stopping can reset them. */
@@ -161,9 +170,13 @@ class NovelTextViewport(
         itemAnimator = null
         isVerticalScrollBarEnabled = true
         addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(view: RecyclerView, dx: Int, dy: Int) = onProgressChanged(percent())
+            override fun onScrolled(view: RecyclerView, dx: Int, dy: Int) {
+                reportVisibleChapter()
+                report(onProgressChanged)
+            }
+
             override fun onScrollStateChanged(view: RecyclerView, state: Int) {
-                if (state == RecyclerView.SCROLL_STATE_IDLE) onProgressSettled(percent())
+                if (state == RecyclerView.SCROLL_STATE_IDLE) report(onProgressSettled)
             }
         })
         addOnItemTouchListener(tapWatcher)
@@ -188,7 +201,34 @@ class NovelTextViewport(
         // An explicit open replaces the window rather than growing it: the chapters around the one
         // being left are not the ones around the one being opened.
         evictAll()
-        append(chapter, settings, startFraction = chapter.progressPercent / 100f)
+        add(chapter, settings, atEnd = true, startFraction = chapter.progressPercent / 100f)
+    }
+
+    override val window: ChapterWindow get() = this
+
+    override suspend fun append(chapter: NovelReaderViewModel.LoadedChapter, settings: NovelReaderSettings) {
+        if (slots.any { it.chapter.chapterId == chapter.chapterId }) return
+        context.appGraph.novelFontManager.warm(settings.fontFamily)
+        add(chapter, settings, atEnd = true, startFraction = 0f)
+    }
+
+    /**
+     * Nothing compensates for the insert. Measured in `RecyclerPrependPositionTest`: a chapter added
+     * above the reading position moves it by zero pixels, because the layout manager anchors on a
+     * child it already has and never lays out an item entirely above the viewport.
+     */
+    override suspend fun prepend(chapter: NovelReaderViewModel.LoadedChapter, settings: NovelReaderSettings) {
+        if (slots.any { it.chapter.chapterId == chapter.chapterId }) return
+        context.appGraph.novelFontManager.warm(settings.fontFamily)
+        // From its end, because that is the edge the reader is about to scroll back into.
+        add(chapter, settings, atEnd = false, startFraction = 0f)
+    }
+
+    override fun evict(chapterId: Long) {
+        val index = slots.indexOfFirst { it.chapter.chapterId == chapterId }
+        if (index < 0) return
+        slots.removeAt(index).block.discarded = true
+        adapter.show(slots)
     }
 
     /** Everything a view is drawn from. The rest of the object (auto-scroll, the rail, volume keys,
@@ -218,7 +258,7 @@ class NovelTextViewport(
                 val fraction = percent() / 100f
                 evictAll()
                 chapters.forEach { (chapter, isVisible) ->
-                    append(chapter, settings, startFraction = if (isVisible) fraction else 0f)
+                    add(chapter, settings, atEnd = true, startFraction = if (isVisible) fraction else 0f)
                 }
                 return@launch
             }
@@ -290,9 +330,10 @@ class NovelTextViewport(
      * so neither they nor a font size they are a multiple of can be restyled in place: a change to
      * those re-appends instead, which is why the start position is a parameter.
      */
-    private fun append(
+    private fun add(
         chapter: NovelReaderViewModel.LoadedChapter,
         settings: NovelReaderSettings,
+        atEnd: Boolean,
         startFraction: Float,
     ) {
         this.settings = settings
@@ -301,7 +342,7 @@ class NovelTextViewport(
         NovelTextStyle.applyMargins(block.container, settings, context)
         val slot = ChapterSlot(chapter, block)
         slot.pendingProgress = startFraction
-        slots.add(slot)
+        slots.add(if (atEnd) slots.size else 0, slot)
         adapter.show(slots)
         renderer.render(
             block = block,
@@ -320,7 +361,9 @@ class NovelTextViewport(
     /** Empties the window. Each block's views leave with it, so nothing holds a chapter's text once
      *  it is out. */
     private fun evictAll() {
+        slots.forEach { it.block.discarded = true }
         slots.clear()
+        reportedVisibleId = null
         adapter.show(slots)
     }
 
@@ -398,16 +441,32 @@ class NovelTextViewport(
         if (dx > 0 && touchDownX <= middle) onStepChapter(false)
     }
 
+    /** Hands [sink] the chapter being read and how far through it the reader is. */
+    private fun report(sink: (Long, Int) -> Unit) {
+        val slot = visibleSlot() ?: return
+        sink(slot.chapter.chapterId, percentOf(slot))
+    }
+
+    /** What the redraw seeks back to, which is always the chapter being read. */
+    private fun percent(): Int = visibleSlot()?.let(::percentOf) ?: 0
+
     /**
      * Zero rather than a hundred while the chapter has no measured height. Reporting completion there
      * would mark the chapter read and retire its download before it had been seen.
      */
-    private fun percent(): Int {
-        val slot = visibleSlot() ?: return 0
+    private fun percentOf(slot: ChapterSlot): Int {
         if (!slot.rendered) return 0
         val view = viewOf(slot) ?: return 0
         val fraction = ChapterScrollProgress.fractionOf(view.top, view.height, recycler.height)
         return (fraction * 100f).roundToInt().coerceIn(0, 100)
+    }
+
+    /** Only a change is announced, because the scroll listener runs on every frame. */
+    private fun reportVisibleChapter() {
+        val id = visibleSlot()?.chapter?.chapterId ?: return
+        if (id == reportedVisibleId) return
+        reportedVisibleId = id
+        onVisibleChapter(id)
     }
 
     /** The chapter being read: the first the viewport has any of on screen, which is how the webtoon

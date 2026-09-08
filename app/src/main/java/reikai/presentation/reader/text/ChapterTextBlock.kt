@@ -38,6 +38,13 @@ class ChapterTextBlock(
      */
     var renderToken: Int = 0
 
+    /**
+     * Set when the viewport drops this chapter, which is what stops an in-flight render. Attachment
+     * cannot stand in for it: a chapter queued below the reader is not attached until it has a
+     * height, and it only gets a height by rendering.
+     */
+    var discarded: Boolean = false
+
     fun ensureChunkCount(count: Int) {
         while (chunkViews.size < count) {
             val view = createChunkView()

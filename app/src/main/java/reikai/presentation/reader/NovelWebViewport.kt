@@ -40,14 +40,19 @@ class NovelWebViewport(
     private val volumeKeysEnabled: Boolean,
     private val volumeKeysInverted: Boolean,
     private val volumeKeyScrollFraction: Float,
-    private val onProgressChanged: (Int) -> Unit,
-    private val onProgressSettled: (Int) -> Unit,
+    /** Named with its chapter, matching the native viewport, so the model never has to assume which
+     *  chapter a percentage belongs to. This renderer holds one, so it is always the loaded one. */
+    private val onProgressChanged: (chapterId: Long, percent: Int) -> Unit,
+    private val onProgressSettled: (chapterId: Long, percent: Int) -> Unit,
     private val onToggleMenu: () -> Unit,
     /** Swipe-between-chapters, forward or back. */
     private val onStepChapter: (forward: Boolean) -> Unit,
     /** Read per load rather than once: the cutout inset is only known after the window has one. */
     private val statusBarHeightPx: () -> Int,
 ) : ReaderViewport, TextViewport {
+
+    /** The chapter the page currently holds, so a progress report can name it. */
+    private var loadedChapterId: Long? = null
 
     /** The document URL the chapter was loaded as, so the navigation policy can tell a footnote jump
      *  from the chapter trying to leave. */
@@ -83,8 +88,10 @@ class NovelWebViewport(
                 // The two carry the same number but mean different things: `progress` is every scroll
                 // frame and drives the chrome, `save` fires at scroll-end and is what gets persisted.
                 // Collapsing them would either write on every frame or never write at all.
-                onSave = { percent -> onProgressSettled(percent) },
-                onProgress = { percent -> mainHandler.post { onProgressChanged(percent) } },
+                onSave = { percent -> loadedChapterId?.let { onProgressSettled(it, percent) } },
+                onProgress = { percent ->
+                    mainHandler.post { loadedChapterId?.let { onProgressChanged(it, percent) } }
+                },
                 onTtsMessage = { _, _ -> },
                 // Auto-scroll is a call into the document, so a document that was not up yet dropped it.
                 // This is the point where it exists, and it fires again on every chapter.
@@ -150,6 +157,7 @@ class NovelWebViewport(
         hasNext: Boolean,
         settings: NovelReaderSettings,
     ) {
+        loadedChapterId = chapter.chapterId
         // Both reads need the window, so they happen here; the document itself is built off the main
         // thread, because a downloaded chapter has its images inlined and the string runs to megabytes.
         val colors = context.resolveReaderThemeColors()

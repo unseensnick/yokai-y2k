@@ -38,4 +38,30 @@ interface TextViewport {
      * only the host knows that it is.
      */
     fun setAutoScroll(running: Boolean, pixelsPerFrame: Float)
+
+    /**
+     * How this renderer holds more than one chapter, or null when it shows one at a time. A slot
+     * rather than a flag, so a renderer that cannot do this is absent from the feature instead of
+     * answering its verbs with nothing.
+     */
+    val window: ChapterWindow? get() = null
+}
+
+/**
+ * Growing and shrinking the set of chapters a renderer holds, so reading crosses a chapter boundary
+ * without a load. Additive rather than a whole-window `load`, because the renderer keeps each
+ * chapter's rendered text and a replacement would throw it away.
+ *
+ * Every call happens after [TextViewport.load] has established the chapter these sit around.
+ */
+interface ChapterWindow {
+
+    /** Adds [chapter] below what is showing. Suspending for the same reason [TextViewport.load] is. */
+    suspend fun append(chapter: NovelReaderViewModel.LoadedChapter, settings: NovelReaderSettings)
+
+    /** Adds [chapter] above what is showing, without moving the reader. */
+    suspend fun prepend(chapter: NovelReaderViewModel.LoadedChapter, settings: NovelReaderSettings)
+
+    /** Drops a chapter the window has moved past, freeing its rendered text. */
+    fun evict(chapterId: Long)
 }

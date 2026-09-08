@@ -130,6 +130,7 @@ class NovelReaderProvider(
                 onStepChapter = { forward ->
                     if (forward) host.engine.nextChapter() else host.engine.previousChapter()
                 },
+                onVisibleChapter = viewModel::reportVisibleChapter,
             )
         }
         return NovelWebViewport(

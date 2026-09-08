@@ -62,7 +62,7 @@ class NovelTextRenderer(
                 contentWidthPx = contentWidth,
                 refererUrl = refererUrl,
                 resolveView = block::chunkViewFor,
-                onImagesReady = { views -> remeasureForImages(views, selectable) },
+                onImagesReady = { views -> remeasureForImages(views, selectable, block) },
             )
 
             val spannable = withContext(Dispatchers.Default) {
@@ -89,7 +89,7 @@ class NovelTextRenderer(
                 }
             }
 
-            if (token != block.renderToken || !block.container.isAttachedToWindow) return@launch
+            if (token != block.renderToken || block.discarded) return@launch
             block.ensureChunkCount(chunks.size)
             if (chunks.isEmpty()) {
                 onTextSet()
@@ -102,7 +102,7 @@ class NovelTextRenderer(
             val precomputed = withContext(Dispatchers.Default) {
                 params?.let { p -> chunks.map { PrecomputedTextCompat.create(it, p) } }
             }
-            if (token != block.renderToken || !block.container.isAttachedToWindow) return@launch
+            if (token != block.renderToken || block.discarded) return@launch
 
             block.clearSelections()
             if (precomputed == null) {
@@ -129,12 +129,14 @@ class NovelTextRenderer(
      * so it has to be built again or the picture draws clipped into the space the placeholder took.
      * A selectable view has no precomputed layout, so asking for one is enough.
      */
-    private fun remeasureForImages(views: List<TextView>, selectable: Boolean) {
-        views.forEach { view -> remeasureOne(view, selectable) }
+    private fun remeasureForImages(views: List<TextView>, selectable: Boolean, block: ChapterTextBlock) {
+        views.forEach { view -> remeasureOne(view, selectable, block) }
     }
 
-    private fun remeasureOne(view: TextView, selectable: Boolean) {
-        if (!view.isAttachedToWindow) return
+    /** Gated on the block rather than the view being attached, for the same reason the render is: a
+     *  chapter waiting below the reader has to finish measuring before it can be scrolled into. */
+    private fun remeasureOne(view: TextView, selectable: Boolean, block: ChapterTextBlock) {
+        if (block.discarded) return
         val snapshot = view.text
         if (selectable || snapshot == null) {
             view.requestLayout()
@@ -145,7 +147,7 @@ class NovelTextRenderer(
             val precomputed = withContext(Dispatchers.Default) {
                 PrecomputedTextCompat.create(SpannableStringBuilder(snapshot), params)
             }
-            if (!view.isAttachedToWindow) return@launch
+            if (block.discarded) return@launch
             try {
                 TextViewCompat.setPrecomputedText(view, precomputed)
             } catch (_: IllegalArgumentException) {

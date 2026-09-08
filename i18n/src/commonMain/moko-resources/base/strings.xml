@@ -692,6 +692,8 @@
     <string name="pref_novel_rendering_mode_native">Native text (in development)</string>
     <string name="pref_novel_text_selectable">Select text by long press</string>
     <string name="pref_novel_text_selectable_summary">Links stop responding to taps, from the next chapter you open</string>
+    <string name="pref_novel_seamless_chapters">Continuous chapters</string>
+    <string name="pref_novel_seamless_chapters_summary">Scroll straight on into the next chapter</string>
     <string name="pref_category_accessibility">Accessibility</string>
     <string name="pref_tap_to_scroll">Tap edges to scroll</string>
     <string name="pref_swipe_between_chapters">Swipe between chapters</string>

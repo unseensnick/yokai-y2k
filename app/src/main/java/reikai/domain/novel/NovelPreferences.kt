@@ -308,6 +308,10 @@ class NovelPreferences(
      *  selection actually engages inside the recycler (see the reader-surface plan doc). */
     fun readerTextSelectable() = preferenceStore.getBoolean("ln_reader_text_selectable", false)
 
+    /** Keep the neighbouring chapters loaded so reading runs on past a chapter's end. Off makes each
+     *  chapter its own page, which some readers want as the place they stop. */
+    fun readerSeamlessChapters() = preferenceStore.getBoolean("ln_reader_seamless_chapters", true)
+
     /** Insert paragraph breaks into chapters that arrive as one unbroken block of text. */
     fun readerAutoSplitText() = preferenceStore.getBoolean("ln_reader_auto_split_text", false)
 

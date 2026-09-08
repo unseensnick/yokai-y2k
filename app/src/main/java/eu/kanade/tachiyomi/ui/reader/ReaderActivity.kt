@@ -89,6 +89,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -618,17 +619,38 @@ class ReaderActivity : BaseActivity() {
         // "Auto" resolves to a preset here; the stored colours are only what a manual choice left
         // behind, so a document built from them would show the wrong shade.
         val resolvedSettings = model.settings.map { it.resolvedForSystemTheme(isNightMode()) }
-        model.chapter
-            .filterNotNull()
-            .distinctUntilChanged()
-            .onEach { chapter ->
-                val neighbours = model.chapterNeighbours.value
-                viewport.load(
-                    chapter = chapter,
-                    hasPrevious = neighbours.previous != null,
-                    hasNext = neighbours.next != null,
-                    settings = resolvedSettings.first(),
-                )
+        // One collector for both, so an arriving neighbour can never overtake the open that
+        // invalidated it. A renderer without a window slot sees only the anchor, which is the whole
+        // window it ever gets.
+        val window = viewport.window
+        var rendered = emptyList<Long>()
+        var renderedGeneration = -1
+        model.window
+            .filter { it.chapters.isNotEmpty() }
+            .onEach { state ->
+                val settings = resolvedSettings.first()
+                val opened = state.generation != renderedGeneration
+                if (opened) {
+                    renderedGeneration = state.generation
+                    val anchor = state.chapters.first { it.chapterId == state.anchorId }
+                    val neighbours = model.chapterNeighbours.value
+                    viewport.load(
+                        chapter = anchor,
+                        hasPrevious = neighbours.previous != null,
+                        hasNext = neighbours.next != null,
+                        settings = settings,
+                    )
+                    rendered = listOf(anchor.chapterId)
+                }
+                if (window == null) return@onEach
+                val wanted = state.chapters.map { it.chapterId }
+                rendered.filterNot { it in wanted }.forEach(window::evict)
+                state.chapters.takeWhile { it.chapterId !in rendered }
+                    .reversed()
+                    .forEach { window.prepend(it, settings) }
+                state.chapters.takeLastWhile { it.chapterId !in rendered }
+                    .forEach { window.append(it, settings) }
+                rendered = wanted
             }
             .launchIn(lifecycleScope)
 

@@ -237,6 +237,12 @@ object SettingsNovelReaderScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_novel_text_selectable),
                     subtitle = stringResource(MR.strings.pref_novel_text_selectable_summary),
                 ).takeIf { renderingMode == NovelRenderingMode.NATIVE },
+                // Same reason: only the native renderer holds more than one chapter at a time.
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = novelPreferences.readerSeamlessChapters(),
+                    title = stringResource(MR.strings.pref_novel_seamless_chapters),
+                    subtitle = stringResource(MR.strings.pref_novel_seamless_chapters_summary),
+                ).takeIf { renderingMode == NovelRenderingMode.NATIVE },
                 Preference.PreferenceItem.ListPreference(
                     preference = novelPreferences.readerDefaultOrientation(),
                     entries = ReaderOrientation.entries
