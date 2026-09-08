@@ -33,10 +33,15 @@ object ChapterGap {
      * Every gap the list would mark, added up, for the header that summarises them. Shares [between]
      * so the total and the inline markers cannot disagree. [ordered] is the list as displayed.
      */
-    fun total(ordered: List<Neighbour>, descending: Boolean): Int =
-        ordered.zipWithNext { first, second ->
+    fun total(ordered: List<Neighbour>, descending: Boolean): Int {
+        val betweenRows = ordered.zipWithNext { first, second ->
             if (descending) between(first, second) else between(second, first)
         }.sum()
+        // The list's own edge counts too, or the header would omit a marker the list draws: whatever
+        // sits below the oldest chapter is missing, and the oldest is at whichever end the sort put it.
+        val oldest = if (descending) ordered.lastOrNull() else ordered.firstOrNull()
+        return betweenRows + between(oldest, null)
+    }
 
     /**
      * Whether the recognized number can be believed, which it can only be when the name labels the
@@ -47,11 +52,17 @@ object ChapterGap {
     private fun numberIsTrustworthy(neighbour: Neighbour): Boolean {
         val tokens = neighbour.name.lowercase().split(nonAlphanumeric).filter { it.isNotEmpty() }
         val first = tokens.firstOrNull() ?: return false
-        val candidate = if (first in labelWords) tokens.getOrNull(1) else first
-        return candidate != null && plainNumber.matches(candidate)
+        val at = if (first in labelWords) 1 else 0
+        val candidate = tokens.getOrNull(at) ?: return false
+        if (!plainNumber.matches(candidate)) return false
+        // Two numbers in the label and there is no telling which is the chapter: "Chapter 523 - 517"
+        // is a site's own index beside the real number, and the recognizer takes the first.
+        return tokens.getOrNull(at + 1)?.let { !plainNumber.matches(it) } ?: true
     }
 
     private val labelWords = setOf("chapter", "ch", "chap", "episode", "ep")
     private val plainNumber = Regex("""^[0-9]+(\.[0-9]+)?$""")
-    private val nonAlphanumeric = Regex("""[^a-z0-9]+""")
+
+    /** Keeps a decimal whole, so "Chapter 5.5" is one number rather than two. */
+    private val nonAlphanumeric = Regex("""[^a-z0-9.]+""")
 }

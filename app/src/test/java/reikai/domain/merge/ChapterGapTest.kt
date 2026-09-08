@@ -64,14 +64,20 @@ class ChapterGapTest {
     }
 
     @Test
-    @DisplayName("a chapter numbered twice in its title still counts")
-    fun dualNumberedTitleIsBelieved() {
-        // "siteIndex - realNumber" naming: the leading token is a plain number, so the name supports
-        // the recognized one and the pair is comparable within its own source.
-        val higher = at(526.0, name = "Chapter 526 - 520 : Unflinching")
-        val lower = at(524.0, name = "Chapter 524 - 518")
+    @DisplayName("a title carrying two numbers is not believed")
+    fun dualNumberedTitleIsDeclined() {
+        // "siteIndex - realNumber" naming: the recognizer takes the first, which is the site's own
+        // index, so comparing it with a plainly numbered neighbour invents a gap.
+        val higher = at(523.0, name = "Chapter 523 - 517")
+        val lower = at(516.0, name = "Chapter 516: Ever His Humble Servant")
 
-        ChapterGap.between(higher, lower) shouldBe 1
+        ChapterGap.between(higher, lower) shouldBe 0
+    }
+
+    @Test
+    @DisplayName("a decimal chapter reads as one number, not two")
+    fun decimalIsOneNumber() {
+        ChapterGap.between(at(7.0, name = "Chapter 7"), at(5.5, name = "Chapter 5.5")) shouldBe 1
     }
 
     @Test
