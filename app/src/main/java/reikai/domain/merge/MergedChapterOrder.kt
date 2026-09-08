@@ -10,7 +10,15 @@ package reikai.domain.merge
  */
 class MergedChapterOrder<T>(private val keyOf: (T) -> Any?) {
 
-    private val order = mutableListOf<T>()
+    /** A chapter with the identity it was placed under. Held rather than recomputed: [keyOf]
+     *  normalizes a chapter title, and the search below would otherwise redo that for every placed
+     *  chapter on every lookup, which is quadratic in the group's size. */
+    private class Placed<T>(val key: Any?, val item: T)
+
+    private val order = mutableListOf<Placed<T>>()
+
+    /** Every identity [order] holds, so a chapter no earlier source had is answered without a scan. */
+    private val placedKeys = HashSet<Any>()
 
     /** Where the last chapter this source contributed or matched sits. */
     private var cursor = -1
@@ -27,7 +35,8 @@ class MergedChapterOrder<T>(private val keyOf: (T) -> Any?) {
     /** Where an already-placed chapter shares [item]'s identity, or -1 when none does. */
     fun positionOf(item: T): Int {
         val key = keyOf(item) ?: return -1
-        return order.indexOfFirst { keyOf(it) == key }
+        if (key !in placedKeys) return -1
+        return order.indexOfFirst { it.key == key }
     }
 
     /**
@@ -56,12 +65,14 @@ class MergedChapterOrder<T>(private val keyOf: (T) -> Any?) {
 
     fun place(item: T) {
         cursor += 1
-        order.add(cursor, item)
+        val key = keyOf(item)
+        order.add(cursor, Placed(key, item))
+        if (key != null) placedKeys.add(key)
     }
 
     fun result(): List<T> {
         placeDeferred()
-        return order
+        return order.map { it.item }
     }
 
     /** A run with no closing chapter cannot be aligned against anything, so it is kept. */
