@@ -37,9 +37,9 @@ import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.library.librarySortComparator
 import reikai.domain.library.sortForCategory
 import reikai.domain.library.toSortMode
-import reikai.domain.merge.ChapterMatchKeyRepository
 import reikai.domain.merge.MergeGroupRepository
-import reikai.domain.merge.ReconcileChapterMatchKeys
+import reikai.domain.merge.MergedChapterUnitRepository
+import reikai.domain.merge.ReconcileMergedChapters
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelRepository
@@ -112,8 +112,8 @@ class NovelLibraryViewModel(
     private val sourceManager: NovelSourceManager,
     private val mergeManager: NovelMergeManager,
     private val mergeGroupRepository: MergeGroupRepository,
-    private val chapterMatchKeyRepository: ChapterMatchKeyRepository,
-    private val reconcileChapterMatchKeys: ReconcileChapterMatchKeys,
+    private val mergedChapterUnitRepository: MergedChapterUnitRepository,
+    private val reconcileMergedChapters: ReconcileMergedChapters,
     private val installer: LnPluginInstaller,
     private val trackerManager: TrackerManager,
     private val getNovelTracks: GetNovelTracks,
@@ -182,7 +182,7 @@ class NovelLibraryViewModel(
         viewModelScope.launchIO {
             mergeGroupRepository.getAllMembershipsAsFlow(ContentType.NOVELS)
                 .distinctUntilChanged()
-                .collectLatest { reconcileChapterMatchKeys.await() }
+                .collectLatest { reconcileMergedChapters.await() }
         }
     }
 
@@ -322,7 +322,7 @@ class NovelLibraryViewModel(
         // is read; an empty map means the identities are not written yet, so the group keeps the
         // representative's own count rather than reporting a wrong one.
         val mergedUnread = if (settings.merge.mergingEnabled) {
-            chapterMatchKeyRepository.getMergedUnreadCountsNovel()
+            mergedChapterUnitRepository.getUnreadCounts(ContentType.NOVELS)
         } else {
             emptyMap()
         }

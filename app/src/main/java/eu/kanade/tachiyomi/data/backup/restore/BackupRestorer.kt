@@ -38,6 +38,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.protobuf.ProtoBuf
 import logcat.LogPriority
+import reikai.domain.merge.ReconcileMergedChapters
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.Database
@@ -69,6 +70,7 @@ class BackupRestorer(
     private val novelRestorer: NovelRestorer,
     private val extensionRestorer: ExtensionRestorer,
     private val feedRestorer: FeedRestorer,
+    private val reconcileMergedChapters: ReconcileMergedChapters,
     // RK <--
 ) {
 
@@ -187,6 +189,15 @@ class BackupRestorer(
         // novel stream above, so it happens here, once both the prefs and the novel categories are in place.
         if (options.categories && options.appSettings) {
             novelRestorer.remapCategoryPreferences(summary.backupNovelCategories)
+        }
+
+        // RK: a restored merge group has no stored cross-source stitch yet, and until it does the group
+        // badges the leading source's own unread count instead of the group's. Stitching here rather
+        // than waiting for the next library update, because a fresh install marks every migration done
+        // without running it, so nothing else fills it in. Runs once both streams have restored their
+        // groups, and only when entries were restored at all, since groups come with them.
+        if (options.libraryEntries) {
+            restoreIsolated("merged chapters") { reconcileMergedChapters.await() }
         }
     }
 

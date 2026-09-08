@@ -99,8 +99,8 @@ object MangaMergeCollapse {
         }
     }
         .thenByDescending { item ->
-            // An empty map is the backfill not having run, where the row count is the only count there
-            // is; once keys exist an absent manga genuinely has none, per chapter_match_key.sq.
+            // An empty map is the group not having been stitched yet, where the row count is the only
+            // count there is; once it has, an absent manga genuinely covers none.
             if (distinctChapterCounts.isEmpty()) {
                 item.libraryManga.totalChapters
             } else {
@@ -121,9 +121,9 @@ object MangaMergeCollapse {
     ): LibraryItem {
         val primary = subGroup.minWith(rankComparator(overrideOrder, preferredSourceIds, distinctChapterCounts))
         // The real count is one unit per chapter the group covers, unread only when no source's copy is
-        // read (see chapter_match_key.sq). Summing the members instead would double-count every chapter
-        // they share. Falls back to the primary's own count when the identities are not available yet,
-        // which under-reports rather than inventing a number.
+        // read (see merged_chapter_unit.sq). Summing the members instead would double-count every
+        // chapter they share. Falls back to the primary's own count when the group has not been stitched
+        // yet, which under-reports rather than inventing a number.
         val unread = mergedUnread ?: primary.unreadCount
         return primary.copy(
             downloadCount = subGroup.sumOf { it.downloadCount },

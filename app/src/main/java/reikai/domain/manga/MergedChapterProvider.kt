@@ -5,6 +5,7 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.merge.ChapterMatchKeys
+import reikai.domain.merge.MergedChapters
 import reikai.domain.merge.crossSourceReadIds
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
@@ -89,11 +90,18 @@ class MergedChapterProvider(
     /** Aggregate + reading order: stitch the sources into one list, then restamp source order so a
      *  "by source order" sort reads top to bottom instead of interleaving sources. Suspend because it
      *  resolves the group's per-source override; both callers (reader load, details flow) already are. */
-    suspend fun aggregate(chaptersBySource: Map<Long, List<Chapter>>, sourceIdByManga: Map<Long, Long>): List<Chapter> {
+    suspend fun aggregate(chaptersBySource: Map<Long, List<Chapter>>, sourceIdByManga: Map<Long, Long>): List<Chapter> =
+        restampReadingOrder(merge(chaptersBySource, sourceIdByManga).chapters)
+
+    /** [aggregate] plus which merged chapter each source's chapter belongs to, for the callers that
+     *  count the group rather than render it. */
+    suspend fun merge(
+        chaptersBySource: Map<Long, List<Chapter>>,
+        sourceIdByManga: Map<Long, Long>,
+    ): MergedChapters<Chapter> {
         // True gallery sources (E-Hentai / ExHentai / nhentai / Pururin / 8Muses / HentaiFox / AsmHentai)
         // treat each chapter as a whole standalone gallery numbered 1, so exempt them from cross-source
-        // number dedup: merging two keeps both instead of collapsing on "1". The predicate is shared with
-        // the match-key reconciliation, so the stored key and this list agree on what dedups.
+        // number dedup: merging two keeps both instead of collapsing on "1".
         val gallerySourceMangaIds = sourceIdByManga
             .filterValues { sourceId -> ChapterMatchKeys.isGallerySource(sourceId, sourceManager) }
             .keys
@@ -103,15 +111,13 @@ class MergedChapterProvider(
             .orEmpty()
         // The stitched order follows each source's own, so that order is stated here rather than left
         // to whatever the rows happen to come back in: the chapter query carries no ORDER BY.
-        return ChapterAggregation
-            .aggregate(
-                chaptersBySource.mapValues { (_, chapters) -> chapters.sortedBy { it.sourceOrder } },
-                sourceIdByManga,
-                reikaiLibraryPreferences.preferredMangaSources.get(),
-                gallerySourceMangaIds,
-                memberRanking,
-            )
-            .let(::restampReadingOrder)
+        return ChapterAggregation.merge(
+            chaptersBySource.mapValues { (_, chapters) -> chapters.sortedBy { it.sourceOrder } },
+            sourceIdByManga,
+            reikaiLibraryPreferences.preferredMangaSources.get(),
+            gallerySourceMangaIds,
+            memberRanking,
+        )
     }
 
     /** The member manga ids in trunk order (first = trunk), for ordering the manage-sources rows so the

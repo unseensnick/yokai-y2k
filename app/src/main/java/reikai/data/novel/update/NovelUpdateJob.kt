@@ -40,7 +40,7 @@ import reikai.data.updateerror.UpdateErrorLog
 import reikai.domain.category.GetNovelCategories
 import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
-import reikai.domain.merge.ReconcileChapterMatchKeys
+import reikai.domain.merge.ReconcileMergedChapters
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
@@ -107,7 +107,7 @@ class NovelUpdateJob(
     private val updateErrorLog = UpdateErrorLog(context)
 
     // Keeps a merged entry's deduplicated unread count in step with newly fetched chapters
-    @Inject private lateinit var reconcileChapterMatchKeys: ReconcileChapterMatchKeys
+    @Inject private lateinit var reconcileMergedChapters: ReconcileMergedChapters
     private val notifier = NovelUpdateNotifier(context)
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -202,7 +202,7 @@ class NovelUpdateJob(
             // New chapters change what a merged entry's deduplicated unread count should be, so bring
             // the stored cross-source identities back in step. Cheap when nothing changed, and only
             // covers merged entries.
-            reconcileChapterMatchKeys.await()
+            reconcileMergedChapters.await()
         }
         notifier.showResults(updates)
         // The dump is one file shared with the manga updater, rewritten on every run so a novel that

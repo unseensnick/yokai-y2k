@@ -6,11 +6,10 @@ import exh.source.getMainSource
 import tachiyomi.domain.source.service.SourceManager
 
 /**
- * The cross-source identity of a manga chapter, as stored in `chapter_match_key`: two chapters from
- * different sources share a key when they are the same chapter, which is what lets a merged entry
- * count them once. Mirrors the rule [reikai.domain.manga.ChapterAggregation] applies when it
- * stitches the merged chapter list, so the library badge and that list agree on what "the same
- * chapter" means. The novel twin is `NovelChapterAggregation.matchKey`, keyed on normalized title.
+ * The cross-source identity of a manga chapter: two chapters from different sources share a key when
+ * they are the same chapter. Used for carrying read state across a merge group; what a merged entry
+ * SHOWS and COUNTS comes from the stitch itself (see `merged_chapter_unit.sq`), which knows the group
+ * and can place a chapter no key identifies. The novel twin is `NovelChapterAggregation.matchKey`.
  */
 object ChapterMatchKeys {
 

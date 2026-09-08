@@ -53,7 +53,7 @@ import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.library.updateerror.DeleteLibraryUpdateErrors
 import reikai.domain.library.updateerror.UpsertLibraryUpdateError
-import reikai.domain.merge.ReconcileChapterMatchKeys
+import reikai.domain.merge.ReconcileMergedChapters
 import reikai.util.workRunningFlow
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
@@ -122,7 +122,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     private val updateErrorLog = UpdateErrorLog(context)
 
     // RK: keeps a merged entry's deduplicated unread count in step with newly fetched chapters
-    @Inject private lateinit var reconcileChapterMatchKeys: ReconcileChapterMatchKeys
+    @Inject private lateinit var reconcileMergedChapters: ReconcileMergedChapters
 
     @Inject private lateinit var notifier: LibraryUpdateNotifier
 
@@ -365,7 +365,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             // RK: new chapters change what a merged entry's deduplicated unread count should be, so
             //     bring the stored cross-source identities back in step. Cheap when nothing changed,
             //     and only covers merged entries.
-            reconcileChapterMatchKeys.await()
+            reconcileMergedChapters.await()
             notifier.showUpdateNotifications(newUpdates)
             if (hasDownloads.load()) {
                 downloadManager.startDownloads()

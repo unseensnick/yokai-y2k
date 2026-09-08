@@ -56,9 +56,9 @@ import reikai.domain.library.sortForCategory
 import reikai.domain.library.toSortMode
 import reikai.domain.manga.MangaMergeManager
 import reikai.domain.manga.MergedChapterProvider
-import reikai.domain.merge.ChapterMatchKeyRepository
 import reikai.domain.merge.MergeGroupRepository
-import reikai.domain.merge.ReconcileChapterMatchKeys
+import reikai.domain.merge.MergedChapterUnitRepository
+import reikai.domain.merge.ReconcileMergedChapters
 import reikai.presentation.library.LibraryFilterPrefs
 import reikai.presentation.library.LibraryGroup
 import reikai.presentation.library.MangaMergeCollapse
@@ -138,11 +138,11 @@ class LibraryViewModel(
     private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
     private val mergeManager: MangaMergeManager,
     private val mergeGroupRepository: MergeGroupRepository,
-    private val chapterMatchKeyRepository: ChapterMatchKeyRepository,
     // RK: backs the `chapter:` search term's id-set lookup.
     private val chapterRepository: ChapterRepository,
     private val mergedChapterProvider: MergedChapterProvider,
-    private val reconcileChapterMatchKeys: ReconcileChapterMatchKeys,
+    private val mergedChapterUnitRepository: MergedChapterUnitRepository,
+    private val reconcileMergedChapters: ReconcileMergedChapters,
     // RK <--
 ) : ViewModel() {
 
@@ -297,7 +297,9 @@ class LibraryViewModel(
         viewModelScope.launchIO {
             mergeGroupRepository.getAllMembershipsAsFlow(ContentType.MANGA)
                 .distinctUntilChanged()
-                .collectLatest { reconcileChapterMatchKeys.await() }
+                .collectLatest {
+                    reconcileMergedChapters.await()
+                }
         }
     }
 
@@ -515,7 +517,7 @@ class LibraryViewModel(
                 // RK: read fresh on every emission rather than cached, so finishing a chapter updates
                 //     the badge immediately: this flow already re-fires on any chapter change.
                 mergedUnreadByGroup = if (mergePrefs.mergingEnabled) {
-                    chapterMatchKeyRepository.getMergedUnreadCounts()
+                    mergedChapterUnitRepository.getUnreadCounts(ContentType.MANGA)
                 } else {
                     emptyMap()
                 },
@@ -525,7 +527,7 @@ class LibraryViewModel(
                 // RK: the same chapter count the details list ranks its trunk on, so both surfaces
                 //     lead on one source. Read here for the same reason as the unread counts above.
                 distinctChapterCounts = if (mergePrefs.mergingEnabled) {
-                    chapterMatchKeyRepository.getMergedDistinctChapterCounts()
+                    mergedChapterUnitRepository.getCoveredChapterCounts()
                 } else {
                     emptyMap()
                 },

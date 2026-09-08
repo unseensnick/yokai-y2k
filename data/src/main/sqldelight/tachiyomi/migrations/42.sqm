@@ -1,0 +1,46 @@
+-- RK: what the cross-source stitch decided for a merge group, so the library badge, the chapter list
+-- and the read carry-over all read one answer. See data/merged_chapter_unit.sq for the full
+-- rationale. These statements mirror that file exactly: fresh installs build from the .sq via
+-- Schema.create(), existing installs reach the same schema here.
+--
+-- No backfill: the tables start empty and the next reconciliation pass fills them, which is the same
+-- code that keeps them current. Every reader treats an empty table as "not stitched yet" rather than
+-- as "this group has no chapters", so nothing reports a wrong number in the meantime.
+CREATE TABLE merged_chapter_unit (
+    chapter_id INTEGER NOT NULL PRIMARY KEY,
+    group_id INTEGER NOT NULL,
+    unit INTEGER,
+    copy_order INTEGER NOT NULL,
+    derived_number REAL NOT NULL,
+    FOREIGN KEY(chapter_id) REFERENCES chapters (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(group_id) REFERENCES merge_group (_id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX merged_chapter_unit_group_index ON merged_chapter_unit(group_id, unit, copy_order);
+
+CREATE TABLE merged_novel_chapter_unit (
+    chapter_id INTEGER NOT NULL PRIMARY KEY,
+    group_id INTEGER NOT NULL,
+    unit INTEGER,
+    copy_order INTEGER NOT NULL,
+    derived_name TEXT NOT NULL,
+    derived_number REAL NOT NULL,
+    FOREIGN KEY(chapter_id) REFERENCES novel_chapters (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(group_id) REFERENCES merge_group (_id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX merged_novel_chapter_unit_group_index
+ON merged_novel_chapter_unit(group_id, unit, copy_order);
+
+-- The per-chapter cross-source keys the tables above replace. Those keys were a second statement of
+-- the stitch's rules, written in SQL, and could not express what the stitch knows: two sources
+-- numbering the same chapter differently are matched by position between shared titles. So the
+-- library badge and the chapter list reached different totals for one series. Both were rebuildable
+-- caches holding nothing of the user's, and nothing reads them any more.
+DROP TABLE IF EXISTS chapter_match_key;
+
+DROP TABLE IF EXISTS novel_chapter_match_key;
