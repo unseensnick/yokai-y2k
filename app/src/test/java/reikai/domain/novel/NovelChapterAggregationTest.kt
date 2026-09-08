@@ -331,4 +331,36 @@ class NovelChapterAggregationTest {
         val member2First = NovelChapterAggregation.aggregate(byNovel, sameSource, memberRanking = listOf(2L, 1L))
         member2First.first { it.chapterNumber == 1.0 }.novelId shouldBe 2L
     }
+
+    @Test
+    fun `two sources counting differently still come out in reading order`() {
+        // The shape that broke: both sources number by their own site's position, so the same chapter
+        // is 11 on one and 1 on the other. Only the titles agree, and the order must follow them.
+        val trunk = listOf(
+            chapter(1L, 11.0, "Alpha"),
+            chapter(1L, 12.0, "Bravo"),
+            chapter(1L, 13.0, "Charlie"),
+        )
+        val other = listOf(
+            chapter(2L, 1.0, "Alpha"),
+            chapter(2L, 2.0, "Bravo"),
+            chapter(2L, 3.0, "Charlie"),
+            chapter(2L, 4.0, "Delta"),
+        )
+
+        val unified = NovelChapterAggregation.aggregate(mapOf(1L to trunk, 2L to other))
+
+        unified.map { it.name } shouldBe listOf("Alpha", "Bravo", "Charlie", "Delta")
+        unified.map { it.sourceOrder } shouldBe listOf(0L, 1L, 2L, 3L)
+    }
+
+    @Test
+    fun `a chapter only the other source has lands between its neighbours`() {
+        val trunk = listOf(chapter(1L, 1.0, "Alpha"), chapter(1L, 3.0, "Charlie"))
+        val other = listOf(chapter(2L, 1.0, "Alpha"), chapter(2L, 2.0, "Bravo"), chapter(2L, 3.0, "Charlie"))
+
+        val unified = NovelChapterAggregation.aggregate(mapOf(1L to trunk, 2L to other))
+
+        unified.map { it.name } shouldBe listOf("Alpha", "Bravo", "Charlie")
+    }
 }

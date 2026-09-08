@@ -36,10 +36,14 @@ class MergedChapterProviderTest {
         return MergedChapterProvider(mockk(), mergeManager, sourceManager, preferences)
     }
 
+    /** Newest first, stamped in the order the rows come back, which is how a manga source lists them. */
+    private fun source(mangaId: Long, vararg numbers: Double): List<Chapter> =
+        numbers.mapIndexed { index, number -> chapter(mangaId, number).copy(sourceOrder = index.toLong()) }
+
     @Test
     fun `aggregate orders the unified list newest-first across sources`() = runTest {
-        val source1 = listOf(chapter(1L, 1.0), chapter(1L, 2.0), chapter(1L, 3.0))
-        val source2 = listOf(chapter(2L, 3.0), chapter(2L, 4.0)) // 4 gap-fills from the other source
+        val source1 = source(1L, 3.0, 2.0, 1.0)
+        val source2 = source(2L, 4.0, 3.0) // 4 gap-fills from the other source
 
         val unified = provider().aggregate(mapOf(1L to source1, 2L to source2), mapOf(1L to 100L, 2L to 200L))
 

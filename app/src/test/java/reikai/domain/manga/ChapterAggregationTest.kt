@@ -307,4 +307,17 @@ class ChapterAggregationTest {
 
         withEmptyOverride shouldBe withoutOverride
     }
+
+    @Test
+    fun `a chapter only the other source has lands between its neighbours`() {
+        // The output is a reading order, not a pool the caller sorts: a gap-filled chapter has to sit
+        // where it belongs, because no key it carries is comparable across sources.
+        val trunk = listOf(chapter(1L, 1.0), chapter(1L, 3.0))
+        val other = listOf(chapter(2L, 1.0), chapter(2L, 2.0), chapter(2L, 3.0))
+
+        val unified = ChapterAggregation.aggregate(mapOf(1L to trunk, 2L to other))
+
+        unified.map { it.chapterNumber } shouldBe listOf(1.0, 2.0, 3.0)
+        unified.map { it.sourceOrder } shouldBe listOf(0L, 1L, 2L)
+    }
 }

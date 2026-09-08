@@ -51,8 +51,9 @@ class GetNextNovelChapter(
             libraryPreferences.preferredNovelSources.get(),
             mergeManager.overrideRankingMemberIds(novelId),
         )
-            // chapterNumber is the cross-source reading order (sourceOrder isn't comparable across sources).
-            .sortedBy { it.chapterNumber }
+            // The stitched position, which is the cross-source reading order. A chapter number is not:
+            // it is whatever its own source counted, so two sources of one novel disagree.
+            .sortedBy { it.sourceOrder }
         return NovelGroupChapters(unified, NovelChapterAggregation.readInOtherSources(byNovel, unified))
     }
 

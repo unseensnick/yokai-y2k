@@ -1,5 +1,6 @@
 package reikai.domain.manga
 
+import reikai.domain.merge.MergedChapterOrder
 import tachiyomi.domain.chapter.model.Chapter
 
 /**
@@ -14,7 +15,8 @@ object ChapterAggregation {
 
     /**
      * Each returned [Chapter] keeps its own [Chapter.mangaId], so a caller can read it from its origin
-     * source; the output is unsorted.
+     * source. The output is in reading order, with each chapter's `sourceOrder` restamped as its
+     * position in that order, which is the only index comparable across the group.
      *
      * @param preferredSourceIds the global ranking, highest first. A listed source wins the trunk over
      *   distinct-count; unranked ones fall back to distinct-count among themselves.
@@ -35,33 +37,44 @@ object ChapterAggregation {
 
         val ranked = rank(chaptersBySource, sourceIdByManga, preferredSourceIds, memberRanking)
 
-        val unified = mutableListOf<Chapter>()
-        val seenNumbers = HashSet<Float>()
+        val order = MergedChapterOrder<Chapter> { chapter ->
+            // Narrowed to Float so a float-origin and a double-origin "1.1" key to the same value
+            // (see the class doc). Null where nothing was recognized, which matches nothing.
+            chapter.chapterNumber.toFloat().takeIf { chapter.isRecognizedNumber }
+        }
         ranked.forEachIndexed { index, source ->
+            order.startSource()
             val isTrunk = index == 0
             val isGallery = source.mangaId in gallerySourceMangaIds
             for (chapter in source.chapters) {
-                when {
-                    // A gallery source's chapters are each a whole standalone gallery / version, and
-                    // every gallery source numbers its primary chapter 1, so cross-source number dedup
-                    // would drop one source's gallery. Keep every gallery chapter instead of collapsing.
-                    isGallery -> unified.add(chapter)
-                    // One row per recognized number across the whole group: add() returns false when
-                    // the number is already covered, collapsing scanlator variants and any number an
-                    // earlier source already supplied. Narrowed to Float so a float-origin and a
-                    // double-origin "1.1" key to the same value (see the class doc).
-                    chapter.isRecognizedNumber -> if (seenNumbers.add(
-                            chapter.chapterNumber.toFloat(),
-                        )
-                    ) {
-                        unified.add(chapter)
-                    }
-                    // Unrecognized numbers can't be matched, so keep only the trunk's.
-                    isTrunk -> unified.add(chapter)
+                // A gallery source's chapters are each a whole standalone gallery / version, and
+                // every gallery source numbers its primary chapter 1, so cross-source number dedup
+                // would drop one source's gallery. Keep every gallery chapter instead of collapsing.
+                if (isGallery) {
+                    order.place(chapter)
+                    continue
                 }
+                if (!chapter.isRecognizedNumber) {
+                    // Unrecognized numbers can't be matched, so keep only the trunk's.
+                    if (isTrunk) order.place(chapter)
+                    continue
+                }
+                // One row per recognized number across the whole group, collapsing scanlator variants
+                // and any number an earlier source already supplied. A covered number is not dropped
+                // silently: it carries this source's place in the order forward.
+                val existing = order.positionOf(chapter)
+                if (existing >= 0) {
+                    order.followTo(existing)
+                    continue
+                }
+                order.place(chapter)
             }
         }
-        return unified
+        // The merged position, which is the only order comparable across sources. Overwrites each
+        // chapter's own index; these are copies, so nothing persists.
+        return order.result().mapIndexed { position, chapter ->
+            chapter.copy(sourceOrder = position.toLong())
+        }
     }
 
     /**

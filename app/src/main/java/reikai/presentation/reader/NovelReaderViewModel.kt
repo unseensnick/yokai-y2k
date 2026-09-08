@@ -554,19 +554,22 @@ class NovelReaderViewModel(
                 // Fetch before marking so the shared interactor sees the chapter as still unread; it flips
                 // read + honors "delete after marked as read".
                 val chapter = chapterRepo.getById(id)
-                // Mark same-numbered unread chapters across the merged group read too, mirroring the
-                // manga reader (ReaderViewModel.updateChapterProgressOnComplete), gated on the shared
+                // Mark this chapter's copies across the merged group read too, mirroring the manga
+                // reader (ReaderViewModel.updateChapterProgressOnComplete), gated on the shared
                 // markDuplicateReadChapterAsRead pref. relatedIdsList returns just this novel when
                 // it isn't merged, so a single-source read is unchanged.
                 val markDupes = libraryPreferences.markDuplicateReadChapterAsRead.get()
                     .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
-                val toMark = if (chapter != null && markDupes) {
+                val key = chapter?.let(NovelChapterAggregation::matchKey)
+                val toMark = if (chapter != null && markDupes && key != null) {
+                    // The same identity the unified list matches on. Comparing chapter numbers marked
+                    // the wrong chapter, because a number is whatever its own source counted: two
+                    // sources of one novel are routinely several apart.
                     val siblings = mergeManager.relatedIdsList(novelId)
                         .takeIf { it.size > 1 }
                         ?.flatMap { chapterRepo.getByNovelId(it) }
                         ?.filter {
-                            it.id != id && !it.read && it.chapterNumber >= 0.0 &&
-                                it.chapterNumber == chapter.chapterNumber
+                            it.id != id && !it.read && NovelChapterAggregation.matchKey(it) == key
                         }
                         .orEmpty()
                     listOf(chapter) + siblings

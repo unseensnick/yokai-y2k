@@ -1,5 +1,6 @@
 package reikai.domain.novel
 
+import reikai.domain.merge.MergedChapterOrder
 import reikai.domain.merge.crossSourceReadIds
 import reikai.domain.novel.model.NovelChapter
 
@@ -20,7 +21,9 @@ object NovelChapterAggregation {
      * @param memberRanking a per-group override: the member novel ids in the group's trunk order. When
      *   non-empty it ranks members by position and [preferredSourceIds] is ignored, so two members
      *   sharing a source still order distinctly. Empty uses the source list.
-     * @return the unified chapter list, unsorted; for 0 or 1 novel, the input unchanged.
+     * @return the unified chapter list in reading order, each chapter's `sourceOrder` restamped as its
+     *   position in that order, which is the only index comparable across the group. For 0 or 1 novel,
+     *   the input unchanged.
      */
     fun aggregate(
         chaptersByNovel: Map<Long, List<NovelChapter>>,
@@ -36,25 +39,32 @@ object NovelChapterAggregation {
         val trunk = ranked.first()
         if (trunk.chapters.none { matchKey(it) != null }) return trunk.chapters
 
-        val unified = mutableListOf<NovelChapter>()
-        val seenKeys = HashSet<String>()
+        val order = MergedChapterOrder(::matchKey)
         ranked.forEachIndexed { index, source ->
+            order.startSource()
             val isTrunk = index == 0
             for (chapter in source.chapters) {
-                val key = matchKey(chapter)
-                when {
-                    // Keep every trunk chapter (no intra-source collapse: novels have no scanlator
-                    // variants, so distinct rows that happen to share a title are still distinct).
-                    isTrunk -> {
-                        unified.add(chapter)
-                        if (key != null) seenKeys.add(key)
-                    }
-                    // Gap-fill a sibling chapter only when its key is new; unkeyable siblings drop.
-                    key != null && seenKeys.add(key) -> unified.add(chapter)
+                // Keep every trunk chapter (no intra-source collapse: novels have no scanlator
+                // variants, so distinct rows that happen to share a title are still distinct).
+                if (isTrunk) {
+                    order.place(chapter)
+                    continue
                 }
+                val existing = order.positionOf(chapter)
+                // Already covered, so this source carries on from where its copy sits.
+                if (existing >= 0) {
+                    order.followTo(existing)
+                    continue
+                }
+                // Gap-fill a sibling chapter only when its key is new; unkeyable siblings drop.
+                if (matchKey(chapter) != null) order.place(chapter)
             }
         }
-        return unified
+        // The merged position, which is the only order comparable across sources. Overwrites each
+        // chapter's own index; these are copies, so nothing persists.
+        return order.result().mapIndexed { position, chapter ->
+            chapter.copy(sourceOrder = position.toLong())
+        }
     }
 
     /** The shared cross-source read carry-over, over this type's title-first identity. */

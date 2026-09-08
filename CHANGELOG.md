@@ -106,6 +106,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 **Light novels**
 
+- **Sorting a chapter list "By source" now really follows that source's own listing, on manga and novels.** It was quietly sorting by chapter number instead, so a source that lists its chapters out of numeric order looked tidier than it is; pick "By chapter number" for the old result.
 - **Novel chapters now start further down the page and space their paragraphs a little more generously, both changeable under Settings -> Novel reader -> Text display.** They are new defaults, so a page you had already tuned keeps the values you set.
 - **A novel page padding you had already set is carried into all four margins when you update.** The single padding setting is replaced by separate top, bottom, left and right margins.
 - **A novel chapter that fails to load now says so and offers to try again.** It used to leave the previous chapter on screen with no sign anything had gone wrong.
@@ -207,6 +208,8 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 **Library**
 
+- **A grouped series' chapter list now reads straight down instead of alternating between its sources.** Two sources rarely agree on what number a chapter is, so the list was being ordered by a number that means something different on each one, on manga and novels alike.
+- **Finishing a chapter now marks that same chapter read on the group's other sources, not one a few along.** It matched on chapter number, which two sources of one series routinely disagree about.
 - **The app no longer freezes on the Library while light-novel plugins are being set up.** It could hang long enough for Android to offer to close it, most often on a slow or freshly started device.
 - **Selecting a range of chapters no longer leaves a hole where you dropped one.** Dropping a chapter out of the middle of a range and then extending it skipped the chapter you had dropped, on manga and novels alike.
 - **Manga and novel chapter lists now answer a range selection the same way.** The two screens filled a range differently, so the same three presses gave you different chapters depending on which you were reading.

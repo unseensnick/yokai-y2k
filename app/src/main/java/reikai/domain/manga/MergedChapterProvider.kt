@@ -101,9 +101,11 @@ class MergedChapterProvider(
         val memberRanking = chaptersBySource.keys.firstOrNull()
             ?.let { mergeManager.overrideRankingMemberIds(it) }
             .orEmpty()
+        // The stitched order follows each source's own, so that order is stated here rather than left
+        // to whatever the rows happen to come back in: the chapter query carries no ORDER BY.
         return ChapterAggregation
             .aggregate(
-                chaptersBySource,
+                chaptersBySource.mapValues { (_, chapters) -> chapters.sortedBy { it.sourceOrder } },
                 sourceIdByManga,
                 reikaiLibraryPreferences.preferredMangaSources.get(),
                 gallerySourceMangaIds,
@@ -126,9 +128,13 @@ class MergedChapterProvider(
         memberRanking,
     )
 
+    /**
+     * The list arrives in reading order from the aggregation and keeps it. Sorting by chapter number
+     * here was the interleave: a number is whatever its own source counted, and two sources of one
+     * series routinely disagree, so the pooled numbers are on different scales.
+     */
     private fun restampReadingOrder(chapters: List<Chapter>): List<Chapter> =
-        chapters.sortedByDescending { it.chapterNumber }
-            .mapIndexed { index, chapter -> chapter.copy(sourceOrder = index.toLong()) }
+        chapters.mapIndexed { index, chapter -> chapter.copy(sourceOrder = index.toLong()) }
 
     /**
      * Re-add the [opened] chapter when the cross-source dedup dropped it. Restamped, because the
@@ -140,6 +146,13 @@ class MergedChapterProvider(
      */
     fun withOpenedChapter(unified: List<Chapter>, opened: Chapter?): List<Chapter> = when {
         opened == null || unified.any { it.id == opened.id } -> unified
-        else -> restampReadingOrder(unified + opened)
+        else -> {
+            // Placed by number rather than appended: the list is already in reading order, and this
+            // row is the only one whose position is not decided. Its own number is the best guess,
+            // since the source it came from is not being stitched here.
+            val at = unified.indexOfFirst { it.chapterNumber < opened.chapterNumber }
+                .takeIf { it >= 0 } ?: unified.size
+            restampReadingOrder(unified.toMutableList().apply { add(at, opened) })
+        }
     }
 }

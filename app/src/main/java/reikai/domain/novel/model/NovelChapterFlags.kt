@@ -86,12 +86,15 @@ fun setNovelFlag(flags: Long, flag: Long, mask: Long): Long = (flags and mask.in
  * reader needs the order without the display filters and always ascending: reading runs first to last
  * whichever way the chapter list happens to be shown, which is the same call the manga reader makes
  * with `getChapterSort(manga, sortDescending = false)`.
+ *
+ * Source order breaks every other key's ties, and for a merged group it is the stitched position.
  */
 fun readingOrderComparator(novel: Novel, prefs: NovelPreferences): Comparator<NovelChapter> =
     when (novel.effectiveSorting(prefs)) {
-        NovelChapterFlags.SORTING_NUMBER -> compareBy { it.chapterNumber }
-        NovelChapterFlags.SORTING_UPLOAD_DATE -> compareBy { it.dateUpload }
-        NovelChapterFlags.SORTING_ALPHABET -> Comparator { a, b -> a.name.compareToWithCollator(b.name) }
+        NovelChapterFlags.SORTING_NUMBER -> compareBy<NovelChapter> { it.chapterNumber }.thenBy { it.sourceOrder }
+        NovelChapterFlags.SORTING_UPLOAD_DATE -> compareBy<NovelChapter> { it.dateUpload }.thenBy { it.sourceOrder }
+        NovelChapterFlags.SORTING_ALPHABET ->
+            Comparator<NovelChapter> { a, b -> a.name.compareToWithCollator(b.name) }.thenBy { it.sourceOrder }
         else -> compareBy { it.sourceOrder }
     }
 
