@@ -431,4 +431,47 @@ class RecyclerPrependPositionTest {
         Log.i(TAG, "RESULT window: attached=$attached visible=$range")
         assertTrue("at least one child should be laid out", attached >= 1)
     }
+
+    /**
+     * The other half of a bounded window: dropping the chapter behind the reader. The prepend case
+     * proved an insert above costs nothing; a removal above is the same anchoring question and had
+     * never been measured, and the shape being replaced compensated for it by hand, because a
+     * NestedScrollView does need that.
+     */
+    @Test
+    fun evictAboveReadingPositionIsFree() {
+        var drift: Int? = null
+        instrumentation.runOnMainSync {
+            val items = mutableListOf(
+                Item(PREVIOUS, CHAPTER),
+                Item(CURRENT, CHAPTER),
+                Item("next", CHAPTER),
+            )
+            val rv = recycler(ChapterAdapter(items))
+            rv.relayout()
+            // Into the middle of the current chapter, so the one being dropped is entirely above.
+            rv.scrollBy(0, CHAPTER + HEIGHT)
+            rv.relayout()
+
+            val before = rv.topOfTag(CURRENT)
+            if (before == null) {
+                Log.w(TAG, "evict: current chapter not attached, skipping")
+                return@runOnMainSync
+            }
+            items.removeAt(0)
+            rv.adapter?.notifyItemRemoved(0)
+            rv.relayout()
+
+            val after = rv.topOfTag(CURRENT)
+            if (after == null) {
+                Log.w(TAG, "evict: current chapter detached after removal, skipping")
+                return@runOnMainSync
+            }
+            drift = after - before
+            Log.i(TAG, "evict-above: before=$before after=$after drift=$drift")
+        }
+        Log.i(TAG, "RESULT evict: drift=$drift")
+        assertNotNull(drift)
+        assertTrue("dropping a chapter above should not move the reader, drift=$drift", abs(drift!!) <= 2)
+    }
 }
