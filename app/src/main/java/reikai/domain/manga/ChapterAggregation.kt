@@ -1,6 +1,8 @@
 package reikai.domain.manga
 
 import reikai.domain.merge.MergedChapterOrder
+import reikai.domain.merge.MergedChapters
+import reikai.domain.merge.unstitchedChapters
 import tachiyomi.domain.chapter.model.Chapter
 
 /**
@@ -32,8 +34,28 @@ object ChapterAggregation {
         preferredSourceIds: List<Long> = emptyList(),
         gallerySourceMangaIds: Set<Long> = emptySet(),
         memberRanking: List<Long> = emptyList(),
-    ): List<Chapter> {
-        if (chaptersBySource.size <= 1) return chaptersBySource.values.firstOrNull().orEmpty()
+    ): List<Chapter> = merge(
+        chaptersBySource,
+        sourceIdByManga,
+        preferredSourceIds,
+        gallerySourceMangaIds,
+        memberRanking,
+    ).chapters
+
+    /**
+     * [aggregate] plus which merged chapter every input chapter belongs to, for the callers that have
+     * to count the group once rather than render it. Same walk, so the two can never disagree.
+     */
+    fun merge(
+        chaptersBySource: Map<Long, List<Chapter>>,
+        sourceIdByManga: Map<Long, Long> = emptyMap(),
+        preferredSourceIds: List<Long> = emptyList(),
+        gallerySourceMangaIds: Set<Long> = emptySet(),
+        memberRanking: List<Long> = emptyList(),
+    ): MergedChapters<Chapter> {
+        if (chaptersBySource.size <= 1) {
+            return unstitchedChapters(chaptersBySource.values.firstOrNull().orEmpty()) { it.id }
+        }
 
         val ranked = rank(chaptersBySource, sourceIdByManga, preferredSourceIds, memberRanking)
 
@@ -64,17 +86,19 @@ object ChapterAggregation {
                 // silently: it carries this source's place in the order forward.
                 val existing = order.positionOf(chapter)
                 if (existing >= 0) {
-                    order.followTo(existing)
+                    order.followTo(existing, chapter)
                     continue
                 }
                 order.place(chapter)
             }
         }
+        val stitched = order.result()
         // The merged position, which is the only order comparable across sources. Overwrites each
         // chapter's own index; these are copies, so nothing persists.
-        return order.result().mapIndexed { position, chapter ->
+        val merged = stitched.merged.mapIndexed { position, chapter ->
             chapter.copy(sourceOrder = position.toLong())
         }
+        return MergedChapters(merged, stitched.units { it.id })
     }
 
     /**

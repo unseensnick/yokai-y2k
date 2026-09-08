@@ -1,7 +1,9 @@
 package reikai.domain.novel
 
 import reikai.domain.merge.MergedChapterOrder
+import reikai.domain.merge.MergedChapters
 import reikai.domain.merge.crossSourceReadIds
+import reikai.domain.merge.unstitchedChapters
 import reikai.domain.novel.model.NovelChapter
 
 /**
@@ -30,14 +32,28 @@ object NovelChapterAggregation {
         sourceIdByNovel: Map<Long, String> = emptyMap(),
         preferredSourceIds: List<String> = emptyList(),
         memberRanking: List<Long> = emptyList(),
-    ): List<NovelChapter> {
-        if (chaptersByNovel.size <= 1) return chaptersByNovel.values.firstOrNull().orEmpty()
+    ): List<NovelChapter> =
+        merge(chaptersByNovel, sourceIdByNovel, preferredSourceIds, memberRanking).chapters
+
+    /**
+     * [aggregate] plus which merged chapter every input chapter belongs to, for the callers that have
+     * to count the group once rather than render it. Same walk, so the two can never disagree.
+     */
+    fun merge(
+        chaptersByNovel: Map<Long, List<NovelChapter>>,
+        sourceIdByNovel: Map<Long, String> = emptyMap(),
+        preferredSourceIds: List<String> = emptyList(),
+        memberRanking: List<Long> = emptyList(),
+    ): MergedChapters<NovelChapter> {
+        if (chaptersByNovel.size <= 1) {
+            return unstitchedChapters(chaptersByNovel.values.firstOrNull().orEmpty()) { it.id }
+        }
 
         val ranked = rank(chaptersByNovel, sourceIdByNovel, preferredSourceIds, memberRanking)
 
         // No usable keys on the trunk -> no reliable cross-source matching, so just show its full list.
         val trunk = ranked.first()
-        if (trunk.chapters.none { matchKey(it) != null }) return trunk.chapters
+        if (trunk.chapters.none { matchKey(it) != null }) return unstitchedChapters(trunk.chapters) { it.id }
 
         val order = MergedChapterOrder(::matchKey)
         ranked.forEachIndexed { index, source ->
@@ -53,7 +69,7 @@ object NovelChapterAggregation {
                 val existing = order.positionOf(chapter)
                 // Already covered, so this source carries on from where its copy sits.
                 if (existing >= 0) {
-                    order.followTo(existing)
+                    order.followTo(existing, chapter)
                     continue
                 }
                 val key = matchKey(chapter)
@@ -68,11 +84,13 @@ object NovelChapterAggregation {
                 }
             }
         }
+        val stitched = order.result()
         // The merged position, which is the only order comparable across sources. Overwrites each
         // chapter's own index; these are copies, so nothing persists.
-        return order.result().mapIndexed { position, chapter ->
+        val merged = stitched.merged.mapIndexed { position, chapter ->
             chapter.copy(sourceOrder = position.toLong())
         }
+        return MergedChapters(merged, stitched.units { it.id })
     }
 
     /** The shared cross-source read carry-over, over this type's title-first identity. */
