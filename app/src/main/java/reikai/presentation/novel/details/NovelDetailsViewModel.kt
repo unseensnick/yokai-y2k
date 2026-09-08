@@ -466,9 +466,24 @@ class NovelDetailsViewModel(
         } else {
             chapterRepo.getByNovelIdAndPageAsFlow(viewNovel.id, pageKey)
         }
+        // The siblings' rows are not shown here, but a chapter read on one of them still reads as read
+        // on this chip, so they are watched too rather than read once: reading elsewhere has to reach
+        // this list the same way it reaches the unified one.
+        val siblingFlows = mergeGroup.relatedIds
+            .filter { it != viewNovel.id }
+            .map { chapterRepo.getByNovelIdAsFlow(it) }
+        val siblingChapters = if (siblingFlows.isEmpty()) {
+            flowOf(emptyList())
+        } else {
+            combine(siblingFlows) { rows -> rows.toList().flatten() }
+        }
         // Fold the download cache's change signal in so a download/delete rebuilds the list.
-        combine(chapterFlow, novelDownloadCache.changes) { chapters, _ -> chapters }.collectLatest { chapters ->
-            rebuildLoaded(anchor, viewNovel, chapters, pages, idx, downloadedIdsFor(chapters))
+        combine(chapterFlow, novelDownloadCache.changes, siblingChapters) { chapters, _, siblings ->
+            chapters to siblings
+        }.collectLatest { (chapters, siblings) ->
+            val stitch = mergedChapterProvider.stitchOf(viewNovel.id)
+            val readElsewhere = readOnAnotherSource(chapters + siblings, chapters, stitch, { it.id }, { it.read })
+            rebuildLoaded(anchor, viewNovel, chapters, pages, idx, downloadedIdsFor(chapters), readElsewhere)
             if (chapters.isEmpty() && isAnchorView) {
                 if (pageKey == null) maybeFirstFetch(viewNovel) else maybeFetchPage(viewNovel, pageKey)
             }
