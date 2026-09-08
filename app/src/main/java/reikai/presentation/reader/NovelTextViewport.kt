@@ -23,6 +23,7 @@ import mihon.app.di.appGraph
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.fraction
 import reikai.presentation.novel.reader.NovelReaderSettings
+import reikai.presentation.reader.text.ChapterScrollProgress
 import reikai.presentation.reader.text.ChapterTextBlock
 import reikai.presentation.reader.text.LinkOnlyMovementMethod
 import reikai.presentation.reader.text.NovelTextRenderer
@@ -297,12 +298,8 @@ class NovelTextViewport(
         // of the chapter for page 3 of 10. The twin rejects it the same way.
         if (progress !is ChapterProgress.Percent) return
         val fraction = progress.fraction
-        val range = recycler.computeVerticalScrollRange() - recycler.computeVerticalScrollExtent()
-        if (range <= 0) {
-            pendingProgress = fraction
-            return
-        }
-        recycler.scrollBy(0, (range * fraction).roundToInt() - recycler.computeVerticalScrollOffset())
+        // Held for the render to apply if the chapter has no height to seek within yet.
+        if (!scrollToFraction(fraction)) pendingProgress = fraction
     }
 
     /** A step rebuilds the chapter, so there is nothing to tell the viewport until it holds more
@@ -372,16 +369,28 @@ class NovelTextViewport(
     }
 
     /**
-     * Zero rather than a hundred while the range is unknown. The recycler reports no scroll range
-     * until the text is measured, and reporting completion there would mark the chapter read and
-     * retire its download before it had been seen. A chapter genuinely shorter than the screen also
-     * reports zero, matching what the WebView reader reports for one.
+     * Zero rather than a hundred while the chapter has no measured height. Reporting completion there
+     * would mark the chapter read and retire its download before it had been seen.
      */
     private fun percent(): Int {
         if (!rendered) return 0
-        val range = recycler.computeVerticalScrollRange() - recycler.computeVerticalScrollExtent()
-        if (range <= 0) return 0
-        return ((recycler.computeVerticalScrollOffset() * 100f) / range).roundToInt().coerceIn(0, 100)
+        val view = chapterView() ?: return 0
+        val fraction = ChapterScrollProgress.fractionOf(view.top, view.height, recycler.height)
+        return (fraction * 100f).roundToInt().coerceIn(0, 100)
+    }
+
+    /** The open chapter's own view, which is what every position here is measured against. Null until
+     *  the recycler has laid it out. */
+    private fun chapterView(): View? = recycler.layoutManager?.findViewByPosition(0)
+
+    /** Puts the reader [fraction] of the way through the open chapter. False when there is nothing to
+     *  seek within yet, which is the chapter's own height rather than the recycler's scroll range. */
+    private fun scrollToFraction(fraction: Float): Boolean {
+        val view = chapterView() ?: return false
+        if (view.height <= recycler.height) return false
+        val target = ChapterScrollProgress.offsetFor(fraction, view.height, recycler.height)
+        recycler.scrollBy(0, target + view.top)
+        return true
     }
 
     private fun applyPendingProgress() {
@@ -389,11 +398,8 @@ class NovelTextViewport(
         val fraction = pendingProgress ?: return
         pendingProgress = null
         if (fraction <= 0f) return
-        // Posted so the freshly set text has been measured; before that the scroll range is zero.
-        recycler.post {
-            val range = recycler.computeVerticalScrollRange() - recycler.computeVerticalScrollExtent()
-            if (range > 0) recycler.scrollBy(0, (range * fraction).roundToInt())
-        }
+        // Posted so the freshly set text has been measured; before that the chapter has no height.
+        recycler.post { scrollToFraction(fraction) }
     }
 
     @SuppressLint("ClickableViewAccessibility")
