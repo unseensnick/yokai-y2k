@@ -54,10 +54,13 @@ import reikai.domain.category.GetNovelCategories
 import reikai.domain.entry.EntryId
 import reikai.domain.entry.vibrantColorKey
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.readOnAnotherSource
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterListEntry
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
+import reikai.domain.novel.NovelMergedChapterProvider
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.buildNovelChapterListEntries
@@ -155,6 +158,7 @@ class NovelDetailsViewModel(
     private val novelPreferences: NovelPreferences,
     private val uiPreferences: UiPreferences,
     private val mergeManager: NovelMergeManager,
+    private val mergedChapterProvider: NovelMergedChapterProvider,
     private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
     private val libraryPreferences: LibraryPreferences,
     private val context: Context,
@@ -420,16 +424,13 @@ class NovelDetailsViewModel(
             combine(flows) { pairs -> pairs.toMap() },
             novelDownloadCache.changes,
         ) { byNovel, _ -> byNovel }.collectLatest { byNovel ->
-            val sources = siblingSources.value
-            val sourceIdByNovel = byNovel.keys.associateWith { id -> sources[id]?.id.orEmpty() }
-            val aggregated = NovelChapterAggregation.aggregate(
-                byNovel,
-                sourceIdByNovel,
-                reikaiLibraryPreferences.preferredNovelSources.get(),
-                mergeManager.overrideRankingMemberIds(anchor.id),
-            )
-            val ordered = restampReadingOrder(aggregated)
-            rebuildLoaded(anchor, anchor, ordered, emptyList(), 0, downloadedIdsFor(ordered))
+            // Read off the stored stitch, the same rows the library badge counts, rather than
+            // stitching again here where the two could come to different answers.
+            val pooled = byNovel.values.flatten()
+            val stitch = mergedChapterProvider.stitchOf(anchor.id)
+            val ordered = mergedChapterProvider.merged(pooled, stitch)
+            val readElsewhere = readOnAnotherSource(pooled, ordered, stitch, { it.id }, { it.read })
+            rebuildLoaded(anchor, anchor, ordered, emptyList(), 0, downloadedIdsFor(ordered), readElsewhere)
         }
     }
 
@@ -491,6 +492,7 @@ class NovelDetailsViewModel(
         pages: List<String>,
         pageIndex: Int,
         downloadedChapterIds: Set<Long>,
+        readInOtherSources: Set<Long> = emptySet(),
     ) {
         val hidden = hiddenChaptersPref.get()
         val view = resolveHiddenChapterView(chapters, hidden, showHiddenFlow.value, ::hiddenKey)
@@ -510,7 +512,8 @@ class NovelDetailsViewModel(
         } else {
             buildNovelChapterListEntries(display, sortDescending)
         }
-        val resume = nonHidden.sortedBy { it.sourceOrder }.firstOrNull { !it.read }
+        val resume = nonHidden.sortedBy { it.sourceOrder }
+            .firstOrNull { !it.read && it.id !in readInOtherSources }
         // When showing hidden, mark which displayed rows are hidden (dimmed + drives Hide/Unhide).
         val hiddenChapterIds = hiddenChapterIdsIn(display, hidden, showHidden, ::hiddenKey) { it.id }
         val viewSource = siblingSources.value[viewNovel.id]
@@ -531,12 +534,13 @@ class NovelDetailsViewModel(
                 isRefreshing = loaded?.isRefreshing ?: false,
                 downloadStates = loaded?.downloadStates.orEmpty(),
                 downloadedChapterIds = downloadedChapterIds,
+                readInOtherSources = readInOtherSources,
                 trackingCount = currentTrackingCount,
                 customInfo = currentCustomInfo,
                 dialog = loaded?.dialog,
                 selection = retainChapterSelection(chapters),
                 resumeChapter = resume,
-                hasStarted = chapters.any { it.read },
+                hasStarted = chapters.any { it.read || it.id in readInOtherSources },
                 seedColor = loaded?.seedColor,
                 sourceName = viewSource?.name ?: source?.name ?: loaded?.sourceName ?: sourceId,
                 sourceUrl = viewSource?.site ?: source?.site ?: loaded?.sourceUrl,
@@ -1113,24 +1117,16 @@ class NovelDetailsViewModel(
         }
     }
 
-    /** Expand [chapters] to include the matching chapter (same recognized number) from every
-     *  grouped source, so read / bookmark applies across the whole merge group. No-op when not
-     *  merged or when none of the chapters have a recognized number. Mirrors
-     *  MangaViewModel.expandToGroup; the recognized-number predicate is `chapterNumber >= 0.0`,
-     *  matching manga's `Chapter.isRecognizedNumber` (NovelChapter has no such property). */
+    /** Expand [chapters] to every grouped source's copy of the same merged chapters, so read /
+     *  bookmark applies across the whole group. No-op when not merged. Mirrors
+     *  MangaViewModel.expandToGroup, off the same stored stitch. */
     private suspend fun expandToGroup(chapters: List<NovelChapter>): List<NovelChapter> {
         val ids = mergeGroup.relatedIds
         if (ids.size <= 1) return chapters
-        val numbers = chapters.asSequence().filter { it.chapterNumber >= 0.0 }.map { it.chapterNumber }.toHashSet()
-        if (numbers.isEmpty()) return chapters
-        val result = chapters.toMutableList()
-        val seen = chapters.mapTo(HashSet()) { it.id }
-        for (sibId in ids) {
-            chapterRepo.getByNovelId(sibId).forEach { c ->
-                if (c.chapterNumber >= 0.0 && c.chapterNumber in numbers && seen.add(c.id)) result += c
-            }
-        }
-        return result
+        val held = chapters.mapTo(HashSet()) { it.id }
+        val wanted = expandToUnits(held, mergedChapterProvider.stitchOf(ids.first())) - held
+        if (wanted.isEmpty()) return chapters
+        return chapters + ids.flatMap { chapterRepo.getByNovelId(it) }.filter { it.id in wanted }
     }
 
     /** True if any tracker is logged in; gates the toolbar action (sheet vs Settings > Tracking). */
@@ -1325,6 +1321,8 @@ sealed interface NovelDetailsState {
         /** Chapter ids downloaded on disk, from NovelDownloadCache (replaces the old is_downloaded flag).
          *  A finished download shows DOWNLOADED via membership here, not a queue state. */
         val downloadedChapterIds: Set<Long> = emptySet(),
+        /** Chapters unread on their own row but already read on another source of the merge group. */
+        val readInOtherSources: Set<Long> = emptySet(),
         /** Bound trackers on a logged-in service; drives the details action-row Tracking button. */
         val trackingCount: Int = 0,
         /** Non-destructive edit-info overlay; the display applies it over [displayNovel] (the raw novel

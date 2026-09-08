@@ -6,6 +6,7 @@ import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import reikai.domain.library.ContentType
+import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.MergedChapterUnitRepository.StoredUnit
 import tachiyomi.data.Database
@@ -24,6 +25,16 @@ class MergedChapterUnitRepositoryImpl(
             ContentType.NOVELS -> queries.staleMergedNovelGroups().awaitAsList()
             else -> queries.staleMergedGroups().awaitAsList()
         }
+
+    override suspend fun getStitch(contentType: ContentType, groupId: Long): List<ChapterUnit> =
+        when (contentType) {
+            ContentType.NOVELS -> queries.stitchOfNovelGroup(groupId) { chapterId, unit, copyOrder ->
+                ChapterUnit(chapterId, unit!!.toInt(), copyOrder.toInt())
+            }
+            else -> queries.stitchOfGroup(groupId) { chapterId, unit, copyOrder ->
+                ChapterUnit(chapterId, unit!!.toInt(), copyOrder.toInt())
+            }
+        }.awaitAsList()
 
     override suspend fun getUnreadCounts(contentType: ContentType): Map<Long, Long> =
         when (contentType) {

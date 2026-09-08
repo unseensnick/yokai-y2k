@@ -36,6 +36,7 @@ import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
+import reikai.domain.novel.NovelMergedChapterProvider
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRenderingMode
 import reikai.domain.novel.NovelRepository
@@ -93,6 +94,7 @@ class NovelReaderViewModel(
     // Merge-group resolution + the shared "mark duplicate read" pref, for marking same-numbered
     // chapters across a merged novel's sources read on completion (parity with the manga reader).
     private val mergeManager: NovelMergeManager,
+    private val mergedChapterProvider: NovelMergedChapterProvider,
     private val libraryPreferences: LibraryPreferences,
     private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
     private val trackNovelChapter: TrackNovelChapter,
@@ -773,15 +775,11 @@ class NovelReaderViewModel(
     private suspend fun resolveGroupChapters(): List<NovelChapter> {
         val ids = mergeManager.relatedIdsList(novelId)
         if (ids.size <= 1) return chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())
-        val byNovel = ids.associateWith { chapterRepo.getByNovelId(it) }
+        val pooled = ids.flatMap { chapterRepo.getByNovelId(it) }
         val sourceIdByNovel = ids.associateWith { novelRepo.getById(it)?.source.orEmpty() }
-        val aggregated = NovelChapterAggregation.aggregate(
-            byNovel,
-            sourceIdByNovel,
-            reikaiLibraryPreferences.preferredNovelSources.get(),
-            mergeManager.overrideRankingMemberIds(novelId),
-        ).sortedWith(readingOrder())
-        return dedupIfEnabled(aggregated, sourceIdByNovel)
+        val stitch = mergedChapterProvider.stitchOf(novelId)
+        val merged = mergedChapterProvider.merged(pooled, stitch).sortedWith(readingOrder())
+        return dedupIfEnabled(merged, sourceIdByNovel)
     }
 
     /**

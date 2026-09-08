@@ -51,7 +51,6 @@ From the 2026-07-04 Komikku parity audit (missing features + gestures on the det
 
 - **Header long-press menus + tap-source-to-browse** `[M]` - long-press the title / author / source for library search, global search and copy (today it only copies); tap the source name to open its browse. Flagship parity gap.
 - **Per-chapter source label on merged entries** `[M]` - show which source each chapter came from in a merged series.
-- **Read the merged chapter list off the stored stitch** `[M]` - the group-owned table landed as `merged_chapter_unit`, holding what the stitch decided so the library badge reads it instead of restating the rules. The details list, the reader and the read carry-over still stitch live on every open, which is a second run of the same walk rather than a second definition. Point them at the table so the stitch runs once per change instead of once per screen. See [merge-system-rebuild.md](docs/dev/plans/merge-system-rebuild.md).
 - **Details overflow polish** `[S]` - per-entry disable-auto-update, clear-data (downloads + cached chapters), open folder, jump to source settings.
 - **AMOLED-aware adult tag-chip borders** `[S]` - weighted / pure-black-dark-mode borders on the adult gallery-info tag chips (copying metadata already works via the metadata viewer).
 

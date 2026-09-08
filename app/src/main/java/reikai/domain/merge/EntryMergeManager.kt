@@ -43,6 +43,11 @@ open class EntryMergeManager(
     /** [computeRelatedIds] as a `List` for callers (the novel reader / tracking path) that want one. */
     suspend fun relatedIdsList(targetId: Long): List<Long> = computeRelatedIds(targetId).toList()
 
+    /** The group [targetId] is in, or null when it is in none or grouping is switched off. What a
+     *  caller reading the group's stored stitch needs, since that is keyed by group rather than entry. */
+    suspend fun groupIdOf(targetId: Long): Long? =
+        if (preferences.seriesMergingEnabled.get()) repository.getGroupId(contentType, targetId) else null
+
     /**
      * Fold [ids] into one group. Refused while merging is off: nothing renders the group, and the
      * library's Unmerge only appears for a row the collapse marked, so the write had no undo.

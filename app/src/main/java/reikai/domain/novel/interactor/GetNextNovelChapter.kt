@@ -1,11 +1,10 @@
 package reikai.domain.novel.interactor
 
 import dev.zacsweers.metro.Inject
-import reikai.domain.library.ReikaiLibraryPreferences
-import reikai.domain.novel.NovelChapterAggregation
+import reikai.domain.merge.readOnAnotherSource
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
-import reikai.domain.novel.NovelRepository
+import reikai.domain.novel.NovelMergedChapterProvider
 import reikai.domain.novel.model.NovelChapter
 
 /** A merged novel's chapters in reading order, and the ids another source of the group already read. */
@@ -22,9 +21,8 @@ data class NovelGroupChapters(
 @Inject
 class GetNextNovelChapter(
     private val chapterRepository: NovelChapterRepository,
-    private val novelRepository: NovelRepository,
     private val mergeManager: NovelMergeManager,
-    private val libraryPreferences: ReikaiLibraryPreferences,
+    private val mergedChapterProvider: NovelMergedChapterProvider,
 ) {
     /**
      * The first unread chapter, for a row with no recorded chapter to resume from (the recents
@@ -43,18 +41,12 @@ class GetNextNovelChapter(
         if (memberIds.size <= 1) {
             return NovelGroupChapters(chapterRepository.getByNovelId(novelId).sortedBy { it.sourceOrder })
         }
-        val byNovel = memberIds.associateWith { chapterRepository.getByNovelId(it) }
-        val sourceIdByNovel = memberIds.associateWith { novelRepository.getById(it)?.source.orEmpty() }
-        val unified = NovelChapterAggregation.aggregate(
-            byNovel,
-            sourceIdByNovel,
-            libraryPreferences.preferredNovelSources.get(),
-            mergeManager.overrideRankingMemberIds(novelId),
-        )
-            // The stitched position, which is the cross-source reading order. A chapter number is not:
-            // it is whatever its own source counted, so two sources of one novel disagree.
-            .sortedBy { it.sourceOrder }
-        return NovelGroupChapters(unified, NovelChapterAggregation.readInOtherSources(byNovel, unified))
+        val pooled = memberIds.flatMap { chapterRepository.getByNovelId(it) }
+        // The stored stitch, which is the cross-source reading order. A chapter number is not: it is
+        // whatever its own source counted, so two sources of one novel disagree.
+        val stitch = mergedChapterProvider.stitchOf(novelId)
+        val unified = mergedChapterProvider.merged(pooled, stitch)
+        return NovelGroupChapters(unified, readOnAnotherSource(pooled, unified, stitch, { it.id }, { it.read }))
     }
 
     /** The group's first unread chapter, skipping what another of its sources has already read. */

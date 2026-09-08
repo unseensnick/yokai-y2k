@@ -96,6 +96,8 @@ import reikai.domain.manga.MangaMergeManager
 import reikai.domain.manga.MangaPreferences
 import reikai.domain.manga.MergedChapterProvider
 import reikai.domain.merge.ChapterGap
+import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.readOnAnotherSource
 import reikai.domain.recommendation.BuildRecommendationHideFilter
 import reikai.domain.recommendation.RECOMMENDS_SOURCE
 import reikai.domain.recommendation.RecommendationHideFilter
@@ -1002,7 +1004,6 @@ class MangaViewModel(
         }
         return combine(perSibling) { siblings ->
             val chaptersBySource = siblings.associate { (id, _, chapters) -> id to chapters }
-            val sourceIdByManga = siblings.associate { (id, manga, _) -> id to manga.source }
             val sourceManga = siblings.first { (id, _, _) -> id == sourceMangaId }.second
             val ownChapters = chaptersBySource[sourceMangaId].orEmpty()
             MergedChapters(
@@ -1011,39 +1012,30 @@ class MangaViewModel(
                 mangaBySource = mapOf(sourceManga.id to sourceManga),
                 displayManga = sourceManga,
                 displaySource = sourceManager.getOrStub(sourceManga.source),
-                readInOtherSources = mergedChapterProvider.readInOtherSources(
-                    chaptersBySource,
-                    sourceIdByManga,
+                // The chip shows one source, but a chapter read on a sibling still reads as read.
+                readInOtherSources = readOnAnotherSource(
+                    chaptersBySource.values.flatten(),
                     ownChapters,
+                    mergedChapterProvider.stitchOf(sourceMangaId),
+                    { it.id },
+                    { it.read },
                 ),
             )
         }
     }
 
-    /** Expand [chapters] to include the matching chapter (same recognized number) from every
-     *  grouped source, so read / bookmark applies across the whole merge group. No-op when not
-     *  merged or when none of the chapters have a recognized number.
+    /** Expand [chapters] to every grouped source's copy of the same merged chapters, so read /
+     *  bookmark applies across the whole group. No-op when not merged.
      *
-     *  Matched on the number narrowed to [Float], the identity the merged chapter list, the reader and
-     *  the library's deduplicated unread count all use: a source that reports its own number hands back
-     *  a 32-bit float while a parsed one is a double, and the two differ by about 2.4e-8, so comparing
-     *  exact doubles silently failed to match a fractional chapter across sources. */
+     *  Reads the stored stitch rather than matching chapter numbers, which two sources of one series
+     *  count differently: comparing them reached a chapter several along on the sibling source. */
     private suspend fun expandToGroup(chapters: List<Chapter>): List<Chapter> {
         val ids = mergeGroup.relatedIds
         if (ids.size <= 1) return chapters
-        val numbers = chapters.asSequence()
-            .filter { it.isRecognizedNumber }
-            .map { it.chapterNumber.toFloat() }
-            .toHashSet()
-        if (numbers.isEmpty()) return chapters
-        val result = chapters.toMutableList()
-        val seen = chapters.mapTo(HashSet()) { it.id }
-        for (sibId in ids) {
-            getMangaAndChapters.awaitChapters(sibId).forEach { c ->
-                if (c.isRecognizedNumber && c.chapterNumber.toFloat() in numbers && seen.add(c.id)) result += c
-            }
-        }
-        return result
+        val held = chapters.mapTo(HashSet()) { it.id }
+        val wanted = expandToUnits(held, mergedChapterProvider.stitchOf(mangaId)) - held
+        if (wanted.isEmpty()) return chapters
+        return chapters + ids.flatMap { getMangaAndChapters.awaitChapters(it) }.filter { it.id in wanted }
     }
 
     /** Raise the stored gallery metadata for a source's manga, mirroring MetadataViewScreenModel.
@@ -1083,18 +1075,15 @@ class MangaViewModel(
         return combine(perSibling) { siblings ->
             val mangaBySource = siblings.associate { (id, manga, _) -> id to manga }
             val chaptersBySource = siblings.associate { (id, _, chapters) -> id to chapters }
-            val sourceIdByManga = siblings.associate { (id, manga, _) -> id to manga.source }
-            // The aggregate + reading-order policy is shared with the reader via MergedChapterProvider.
-            val aggregated = mergedChapterProvider.aggregate(chaptersBySource, sourceIdByManga)
+            // Read off the stored stitch, the same rows the library badge counts.
+            val pooled = chaptersBySource.values.flatten()
+            val stitch = mergedChapterProvider.stitchOf(displayManga.id)
+            val merged = mergedChapterProvider.merged(pooled, stitch)
             MergedChapters(
                 manga = displayManga,
-                chapters = aggregated,
+                chapters = merged,
                 mangaBySource = mangaBySource,
-                readInOtherSources = mergedChapterProvider.readInOtherSources(
-                    chaptersBySource,
-                    sourceIdByManga,
-                    aggregated,
-                ),
+                readInOtherSources = readOnAnotherSource(pooled, merged, stitch, { it.id }, { it.read }),
             )
         }
     }

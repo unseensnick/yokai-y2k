@@ -13,6 +13,12 @@ interface MergedChapterUnitRepository {
     suspend fun getStaleGroups(contentType: ContentType): List<Long>
 
     /**
+     * [groupId]'s stored stitch, in merged order, for a screen about to render it. Chapters the stitch
+     * dropped are left out, since they render nowhere. Empty when the group has never been stitched.
+     */
+    suspend fun getStitch(contentType: ContentType, groupId: Long): List<ChapterUnit>
+
+    /**
      * Replace [groupId]'s stored stitch with [units], clearing what was there first, in one
      * transaction. Passing none clears the group, which is what a group with too few library members
      * left to stitch comes to.

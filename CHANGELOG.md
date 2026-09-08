@@ -213,6 +213,8 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **"Missing N chapters" no longer invents gaps on a grouped series, on manga and novels alike.** It compared numbers across two sources that count differently, and believed a volume extra's title enough to claim hundreds were missing.
 - **A grouped novel no longer lists a chapter twice when its title is only a number.** With no words to match on, both sources' copies survived; they are now paired by where they sit between the chapters that do have titles.
 - **A grouped series' unread badge in your library now counts exactly the chapters its chapter list shows, on manga and novels alike.** The badge used to work the total out on its own and could land on a different number than the page it belonged to.
+- **Marking a chapter read or bookmarked on a grouped series now reaches that same chapter on its other sources, not one a few along.** It matched by chapter number, which two sources of one series rarely agree on.
+- **A grouped novel's chapter list now shows a chapter as read once any of its sources has read it, as the manga side already did.**
 - **The app no longer freezes on the Library while light-novel plugins are being set up.** It could hang long enough for Android to offer to close it, most often on a slow or freshly started device.
 - **Selecting a range of chapters no longer leaves a hole where you dropped one.** Dropping a chapter out of the middle of a range and then extending it skipped the chapter you had dropped, on manga and novels alike.
 - **Manga and novel chapter lists now answer a range selection the same way.** The two screens filled a range differently, so the same three presses gave you different chapters depending on which you were reading.

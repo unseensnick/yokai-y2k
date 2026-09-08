@@ -20,6 +20,7 @@ import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelHistoryRepository
 import reikai.domain.novel.NovelMergeManager
+import reikai.domain.novel.NovelMergedChapterProvider
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.NovelTrackRepository
@@ -91,6 +92,7 @@ class MetroInteropModule(
     private val novelDelayedTrackingStore: Provider<NovelDelayedTrackingStore>,
 
     private val novelMergeManager: Provider<NovelMergeManager>,
+    private val novelMergedChapterProvider: Provider<NovelMergedChapterProvider>,
     private val eHentaiUpdateHelper: Provider<EHentaiUpdateHelper>,
 ) : InjektModule {
 
@@ -134,6 +136,7 @@ class MetroInteropModule(
         addSingletonFactory { novelDelayedTrackingStore() }
 
         addSingletonFactory { novelMergeManager() }
+        addSingletonFactory { novelMergedChapterProvider() }
         addSingletonFactory { eHentaiUpdateHelper() }
     }
 }

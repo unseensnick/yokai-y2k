@@ -149,6 +149,22 @@ INSERT OR REPLACE INTO merged_novel_chapter_unit(
 SELECT :chapterId, :groupId, :unit, :copyOrder, :derivedName, :derivedNumber
 WHERE EXISTS (SELECT 1 FROM novel_chapters WHERE _id = :chapterId);
 
+-- One group's stored stitch, for a screen about to render it. Ordered so the caller can walk it
+-- straight into a list: by merged position, then by how the stitch ranked the sources holding it.
+stitchOfGroup:
+SELECT chapter_id AS chapterId, unit, copy_order AS copyOrder
+FROM merged_chapter_unit
+WHERE group_id = :groupId
+AND unit IS NOT NULL
+ORDER BY unit, copy_order;
+
+stitchOfNovelGroup:
+SELECT chapter_id AS chapterId, unit, copy_order AS copyOrder
+FROM merged_novel_chapter_unit
+WHERE group_id = :groupId
+AND unit IS NOT NULL
+ORDER BY unit, copy_order;
+
 -- Deduplicated unread count per merge group: one unit per chapter the group covers, unread only when
 -- no member source's copy of it is read, which is what makes the number independent of which source
 -- currently leads. Nothing here restates the stitch; it reads what the stitch decided, so this cannot

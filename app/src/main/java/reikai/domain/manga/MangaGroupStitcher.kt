@@ -5,16 +5,20 @@ import dev.zacsweers.metro.ContributesIntoSet
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import reikai.domain.library.ContentType
+import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.ChapterMatchKeys
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository.StoredUnit
 import reikai.domain.merge.MergedGroupStitcher
 import reikai.domain.merge.storedUnitsOf
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
+import tachiyomi.domain.source.service.SourceManager
 
 /**
- * The manga half of keeping a merge group's stored stitch current. Chapters are loaded WITHOUT the
- * scanlator filter: an excluded scanlator is a display choice, and the stored copy ranking lets a
- * reader skip its rows and fall to the next source, so excluding one needs no restitch.
+ * The manga half of keeping a merge group's stored stitch current, and the only place manga chapters
+ * are stitched at all. Chapters are loaded WITHOUT the scanlator filter: an excluded scanlator is a
+ * display choice, and the stored copy ranking lets a reader skip its rows and fall to the next source,
+ * so excluding one needs no restitch.
  */
 @Inject
 @SingleIn(AppScope::class)
@@ -22,7 +26,9 @@ import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 class MangaGroupStitcher(
     private val mergeGroupRepository: MergeGroupRepository,
     private val getMangaWithChapters: GetMangaWithChapters,
-    private val mergedChapterProvider: MergedChapterProvider,
+    private val mergeManager: MangaMergeManager,
+    private val sourceManager: SourceManager,
+    private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
 ) : MergedGroupStitcher {
 
     override val contentType = ContentType.MANGA
@@ -32,7 +38,21 @@ class MangaGroupStitcher(
         if (members.isEmpty()) return emptyList()
         val chaptersBySource = members.associateWith { getMangaWithChapters.awaitChapters(it) }
         val sourceIdByManga = members.associateWith { getMangaWithChapters.awaitManga(it).source }
-        val merged = mergedChapterProvider.merge(chaptersBySource, sourceIdByManga)
+        // True gallery sources (E-Hentai / ExHentai / nhentai / Pururin / 8Muses / HentaiFox / AsmHentai)
+        // treat each chapter as a whole standalone gallery numbered 1, so exempt them from cross-source
+        // number dedup: merging two keeps both instead of collapsing on "1".
+        val gallerySourceMangaIds = sourceIdByManga
+            .filterValues { sourceId -> ChapterMatchKeys.isGallerySource(sourceId, sourceManager) }
+            .keys
+        val merged = ChapterAggregation.merge(
+            // The stitched order follows each source's own, so that order is stated here rather than
+            // left to whatever the rows come back in: the chapter query carries no ORDER BY.
+            chaptersBySource.mapValues { (_, chapters) -> chapters.sortedBy { it.sourceOrder } },
+            sourceIdByManga,
+            reikaiLibraryPreferences.preferredMangaSources.get(),
+            gallerySourceMangaIds,
+            mergeManager.overrideRankingMemberIds(members.first()),
+        )
         return storedUnitsOf(
             chapters = chaptersBySource.values.flatten(),
             merged = merged,
