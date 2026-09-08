@@ -15,8 +15,12 @@ class MergedChapterOrder<T>(private val keyOf: (T) -> Any?) {
     /** Where the last chapter this source contributed or matched sits. */
     private var cursor = -1
 
+    /** Chapters this source offered that carry no identity, waiting on the next one that does. */
+    private val deferred = mutableListOf<T>()
+
     /** Call before walking each source, so it starts placing from the top again. */
     fun startSource() {
+        placeDeferred()
         cursor = -1
     }
 
@@ -26,9 +30,28 @@ class MergedChapterOrder<T>(private val keyOf: (T) -> Any?) {
         return order.indexOfFirst { keyOf(it) == key }
     }
 
-    /** This source's next chapter continues from [index], which [positionOf] found. */
+    /**
+     * This source's next chapter continues from [index], which [positionOf] found. That closes any
+     * run of unidentifiable chapters since the last one: when this source offered exactly as many as
+     * the order already holds between the two, they are the same chapters seen twice, so they go.
+     * Any other count means the runs do not correspond and every one is kept.
+     */
     fun followTo(index: Int) {
-        cursor = index
+        val between = index - cursor - 1
+        cursor = if (deferred.size == between) {
+            deferred.clear()
+            index
+        } else {
+            val added = deferred.size
+            placeDeferred()
+            index + added
+        }
+    }
+
+    /** A chapter with no identity of its own. Where it belongs is only knowable once the next
+     *  identifiable one arrives, so the decision waits for [followTo]. */
+    fun defer(item: T) {
+        deferred.add(item)
     }
 
     fun place(item: T) {
@@ -36,5 +59,14 @@ class MergedChapterOrder<T>(private val keyOf: (T) -> Any?) {
         order.add(cursor, item)
     }
 
-    fun result(): List<T> = order
+    fun result(): List<T> {
+        placeDeferred()
+        return order
+    }
+
+    /** A run with no closing chapter cannot be aligned against anything, so it is kept. */
+    private fun placeDeferred() {
+        deferred.forEach(::place)
+        deferred.clear()
+    }
 }

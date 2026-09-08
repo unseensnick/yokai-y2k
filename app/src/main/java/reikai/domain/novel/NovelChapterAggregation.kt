@@ -56,8 +56,16 @@ object NovelChapterAggregation {
                     order.followTo(existing)
                     continue
                 }
-                // Gap-fill a sibling chapter only when its key is new; unkeyable siblings drop.
-                if (matchKey(chapter) != null) order.place(chapter)
+                val key = matchKey(chapter)
+                when {
+                    // Unkeyable siblings drop: nothing identifies them and nothing places them.
+                    key == null -> {}
+                    // A title is an identity, so a new one is a chapter this source alone has.
+                    key.startsWith(TITLE_KEY_PREFIX) -> order.place(chapter)
+                    // Only a number, which the other source counts differently, so it identifies
+                    // nothing across the group. Its position decides instead.
+                    else -> order.defer(chapter)
+                }
             }
         }
         // The merged position, which is the only order comparable across sources. Overwrites each
@@ -131,10 +139,14 @@ object NovelChapterAggregation {
      */
     fun matchKey(name: String, chapterNumber: Double): String? {
         val title = normalizedTitle(name)
-        if (title.isNotEmpty()) return "t:$title"
+        if (title.isNotEmpty()) return "$TITLE_KEY_PREFIX$title"
         if (chapterNumber > 0.0) return "n:$chapterNumber"
         return null
     }
+
+    /** Marks a key built from title text rather than from a number, which is the identity that
+     *  survives two sources counting differently. */
+    private const val TITLE_KEY_PREFIX = "t:"
 
     private val labelWords = setOf(
         "chapter", "ch", "chap", "episode", "ep", "part", "pt", "vol", "volume", "book", "season", "s",

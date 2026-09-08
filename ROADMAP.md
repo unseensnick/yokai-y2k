@@ -51,7 +51,6 @@ From the 2026-07-04 Komikku parity audit (missing features + gestures on the det
 
 - **Header long-press menus + tap-source-to-browse** `[M]` - long-press the title / author / source for library search, global search and copy (today it only copies); tap the source name to open its browse. Flagship parity gap.
 - **Per-chapter source label on merged entries** `[M]` - show which source each chapter came from in a merged series.
-- **Match a merged chapter whose title carries no words** `[M]` (open gap) - a chapter titled only with numbers has no title text to key on, and two sources' numbers are on different scales, so both copies survive the dedup and sit near rather than at their place. Neither Komikku nor TachiyomiSY solves this; any fix means reconciling two numberings, which nothing upstream attempts. [Plan](docs/dev/plans/merged-read-state.md).
 - **Details overflow polish** `[S]` - per-entry disable-auto-update, clear-data (downloads + cached chapters), open folder, jump to source settings.
 - **AMOLED-aware adult tag-chip borders** `[S]` - weighted / pure-black-dark-mode borders on the adult gallery-info tag chips (copying metadata already works via the metadata viewer).
 

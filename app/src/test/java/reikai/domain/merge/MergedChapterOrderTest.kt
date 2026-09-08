@@ -88,6 +88,58 @@ class MergedChapterOrderTest {
         order.result().toSet() shouldBe setOf("a:1", "a:2")
     }
 
+    /** The source laying down the spine keeps everything it has, identifiable or not. */
+    private fun MergedChapterOrder<String>.addTrunk(vararg items: String) {
+        startSource()
+        items.forEach(::place)
+    }
+
+    /** A later source, whose "?" entries carry no identity, so only their position can place them. */
+    private fun MergedChapterOrder<String>.addSourceDeferring(vararg items: String) {
+        startSource()
+        for (item in items) {
+            if (item.startsWith("?")) {
+                defer(item)
+                continue
+            }
+            val existing = positionOf(item)
+            if (existing >= 0) followTo(existing) else place(item)
+        }
+    }
+
+    @Test
+    @DisplayName("an unidentifiable run matching the one already there is the same chapters")
+    fun equalRunsBetweenAnchorsAreTheSame() {
+        val order = order()
+
+        order.addTrunk("a:1", "?x:1", "?y:1", "b:1")
+        order.addSourceDeferring("a:2", "?x:2", "?y:2", "b:2")
+
+        order.result() shouldBe listOf("a:1", "?x:1", "?y:1", "b:1")
+    }
+
+    @Test
+    @DisplayName("an unidentifiable run of a different length is kept whole")
+    fun unequalRunsAreBothKept() {
+        val order = order()
+
+        order.addTrunk("a:1", "?x:1", "b:1")
+        order.addSourceDeferring("a:2", "?x:2", "?y:2", "b:2")
+
+        order.result() shouldBe listOf("a:1", "?x:2", "?y:2", "?x:1", "b:1")
+    }
+
+    @Test
+    @DisplayName("an unidentifiable run with nothing after it is kept")
+    fun trailingRunWithNoAnchorIsKept() {
+        val order = order()
+
+        order.addTrunk("a:1")
+        order.addSourceDeferring("a:2", "?x:2")
+
+        order.result() shouldBe listOf("a:1", "?x:2")
+    }
+
     @Test
     @DisplayName("each source starts placing from the top again")
     fun cursorResetsPerSource() {
