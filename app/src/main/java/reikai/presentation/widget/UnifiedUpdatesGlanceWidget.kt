@@ -187,9 +187,14 @@ class UnifiedUpdatesGlanceWidget : GlanceAppWidget() {
         // The manga query already returns unread only (getUpdates read=false); filter the novel side to
         // match. Dedupe per series, then per merge group so a series grouped across sources draws one
         // cover, then give each section half the rows.
-        val merged = reikaiLibraryPreferences.seriesMergingEnabled.get()
-        val novelGroups = if (merged) mergeGroupRepository.getAllMemberships(ContentType.NOVELS) else emptyMap()
-        val mangaGroups = if (merged) mergeGroupRepository.getAllMemberships(ContentType.MANGA) else emptyMap()
+        val (mangaGroups, novelGroups) = withIOContext {
+            if (reikaiLibraryPreferences.seriesMergingEnabled.get()) {
+                mergeGroupRepository.getAllMemberships(ContentType.MANGA) to
+                    mergeGroupRepository.getAllMemberships(ContentType.NOVELS)
+            } else {
+                emptyMap<Long, Long>() to emptyMap()
+            }
+        }
         val novelRows = novel.filter { !it.read }.distinctBy { it.novelId }
             .dedupeByMergeGroup(novelGroups) { it.novelId }
         val mangaRows = manga.distinctBy { it.mangaId }.dedupeByMergeGroup(mangaGroups) { it.mangaId }

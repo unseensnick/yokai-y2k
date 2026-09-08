@@ -355,7 +355,8 @@ class NovelLibraryViewModel(
             val groupId = settings.merge.membership[group.representative.novel.id]
                 ?.takeIf { group.memberIds.size > 1 }
             val merged = groupId?.let { mergedUnread[it] }
-            val downloads = groupId?.takeIf { mergedDownloads.isNotEmpty() }?.let { mergedDownloads[it] ?: 0 }
+            // Absent is a group nothing has stitched, where the members' own sum is the only answer.
+            val downloads = groupId?.takeIf { mergedDownloads.isNotEmpty() }?.let { mergedDownloads[it] }
             group.copy(
                 unreadCount = merged ?: group.unreadCount,
                 totalDownloadCount = downloads?.toLong() ?: group.totalDownloadCount,

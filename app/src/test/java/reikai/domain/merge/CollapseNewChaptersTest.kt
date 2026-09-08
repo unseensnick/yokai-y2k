@@ -21,7 +21,7 @@ class CollapseNewChaptersTest {
     )
 
     private fun collapse(newByEntry: Map<Long, List<Row>>, groupOf: Map<Long, Long> = mapOf(1L to 7L, 2L to 7L)) =
-        collapseNewChapters(newByEntry, groupOf, mapOf(7L to stitch)) { it.id }
+        collapseNewChapters(newByEntry, groupOf, mapOf(7L to stitch)) { it.id }.announced
 
     @Test
     @DisplayName("an entry in no group keeps every chapter it reported")
@@ -64,14 +64,36 @@ class CollapseNewChaptersTest {
             mapOf(1L to listOf(Row(10)), 2L to listOf(Row(20))),
             mapOf(1L to 7L, 2L to 7L),
             emptyMap(),
-        ) { it.id } shouldBe setOf(10L, 20L)
+        ) { it.id }.announced shouldBe setOf(10L, 20L)
     }
 
     @Test
-    @DisplayName("a chapter the stitch places nowhere is not announced")
-    fun droppedChapterIsNotAnnounced() {
-        // The stitch drops a copy nothing identifies and nothing places, so it renders on no screen
-        // and counts in no badge. Announcing it would offer the user a chapter they cannot open.
-        collapse(mapOf(1L to listOf(Row(99)))) shouldBe emptySet()
+    @DisplayName("a chapter the stitch places nowhere is still announced")
+    fun unplacedChapterIsStillAnnounced() {
+        // The stitch drops a copy nothing identifies and nothing places, but the row still exists and
+        // the Updates feed still lists it, so dropping it here would announce fewer than that feed.
+        collapse(mapOf(1L to listOf(Row(99)))) shouldBe setOf(99L)
+    }
+
+    @Test
+    @DisplayName("a copy the stitch placed carries its merged chapter as a deduplication key")
+    fun placedCopiesShareADedupeKey() {
+        // What the download half runs on: it picks among the copies its own eligibility rules left,
+        // which are often not the copy announced, so it needs the key rather than that answer.
+        val arrivals = collapseNewChapters(
+            mapOf(1L to listOf(Row(10)), 2L to listOf(Row(20))),
+            mapOf(1L to 7L, 2L to 7L),
+            mapOf(7L to stitch),
+        ) { it.id }
+
+        arrivals.dedupeKey(10) shouldBe arrivals.dedupeKey(20)
+    }
+
+    @Test
+    @DisplayName("a chapter no stitch places is its own deduplication key")
+    fun unplacedCopyKeysItself() {
+        val arrivals = collapseNewChapters(mapOf(3L to listOf(Row(30))), emptyMap(), emptyMap()) { it.id }
+
+        arrivals.dedupeKey(30) shouldBe 30L
     }
 }

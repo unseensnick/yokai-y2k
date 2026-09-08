@@ -26,9 +26,11 @@ import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.setForegroundSafely
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.app.di.AppGraph
 import mihon.app.di.appGraph
@@ -40,6 +42,7 @@ import reikai.data.updateerror.UpdateErrorLog
 import reikai.domain.category.GetNovelCategories
 import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.CollapsedArrivals
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
@@ -146,6 +149,28 @@ class NovelUpdateJob(
     }
 
     private suspend fun updateNovels(categoryId: Long) {
+        // Both outlive the run itself, so a cancelled one still queues what it fetched and still counts
+        // it: those chapters are in the database now and are never new again.
+        val updates = mutableListOf<Pair<Novel, List<NovelChapter>>>()
+        val pendingDownloads = mutableListOf<NovelChapter>()
+        var counted: Int? = null
+        try {
+            counted = runUpdate(categoryId, updates, pendingDownloads)
+        } finally {
+            withContext(NonCancellable) {
+                val arrivals = counted ?: updates.sumOf { it.second.size }
+                if (arrivals > 0) libraryPreferences.newUpdatesCount.getAndSet { it + arrivals }
+                if (pendingDownloads.isNotEmpty()) downloadManager.downloadChapters(pendingDownloads)
+            }
+        }
+    }
+
+    /** The run itself. Returns the arrivals the badge should carry, null when it did not finish. */
+    private suspend fun runUpdate(
+        categoryId: Long,
+        updates: MutableList<Pair<Novel, List<NovelChapter>>>,
+        pendingDownloads: MutableList<NovelChapter>,
+    ): Int? {
         // One load brings every installed plugin into the host; per-novel resolution is then cheap.
         runCatching { installer.ensureLoaded() }
 
@@ -163,14 +188,10 @@ class NovelUpdateJob(
                 if (categoryOk && passesSmartUpdate(novel)) add(novel)
             }
         }
-        if (favorites.isEmpty()) return
+        if (favorites.isEmpty()) return null
 
         val downloadNew = preferences.downloadNewChapters().get()
-        // The chapters ride along rather than being counted here: a notification names them the way
-        // the manga updater's does, which it cannot do from a total.
-        val updates = mutableListOf<Pair<Novel, List<NovelChapter>>>()
         val failed = mutableListOf<UpdateErrorEntry>()
-        val pendingDownloads = mutableListOf<NovelChapter>()
         favorites.forEachIndexed { index, novel ->
             currentCoroutineContext().ensureActive()
             // [index] is how many are already done, which is what the bar reports while this one runs.
@@ -212,17 +233,16 @@ class NovelUpdateJob(
             // chapter: a group's sources each report the same chapter, and counting them apart told
             // the user it had arrived once per source.
             reconcileMergedChapters.await()
-            val kept = collapseNewUpdates(updates)
-            val toDownload = pendingDownloads.filter { it.id in kept }
-            if (toDownload.isNotEmpty()) downloadManager.downloadChapters(toDownload)
+            val arrivals = collapseNewUpdates(updates)
+            // One download per merged chapter, chosen among the copies this run found eligible rather
+            // than by intersecting with the announced set: eligibility is per entry, so the copy that
+            // may be downloaded is often not the copy the stitch ranks first.
+            val collapsed = pendingDownloads.distinctBy { arrivals.dedupeKey(it.id) }
+            pendingDownloads.clear()
+            pendingDownloads.addAll(collapsed)
             updates.mapNotNull { (novel, chapters) ->
-                chapters.filter { it.id in kept }.takeIf { it.isNotEmpty() }?.let { novel to it }
+                chapters.filter { it.id in arrivals.announced }.takeIf { it.isNotEmpty() }?.let { novel to it }
             }
-        }
-        val newChapterTotal = announced.sumOf { it.second.size }
-        // Feed the shared Updates-icon badge (manga + novel share one total; reset on Updates open).
-        if (newChapterTotal > 0) {
-            libraryPreferences.newUpdatesCount.getAndSet { it + newChapterTotal }
         }
         notifier.showResults(announced)
         // The dump is one file shared with the manga updater, rewritten on every run so a novel that
@@ -231,11 +251,12 @@ class NovelUpdateJob(
         if (failed.isNotEmpty()) {
             notifier.showUpdateErrors(failed.size, errorFile.getUriCompat(context), trackErrors)
         }
+        return announced.sumOf { it.second.size }
     }
 
     /** The chapter ids this run should act on, one per merged chapter. The twin of the manga job's,
      *  over the same kernel. */
-    private suspend fun collapseNewUpdates(updates: List<Pair<Novel, List<NovelChapter>>>): Set<Long> {
+    private suspend fun collapseNewUpdates(updates: List<Pair<Novel, List<NovelChapter>>>): CollapsedArrivals {
         val newByNovel = updates.associate { (novel, chapters) -> novel.id to chapters }
         val groupOf = mergeGroupRepository.getAllMemberships(ContentType.NOVELS)
             .filterKeys { it in newByNovel.keys }

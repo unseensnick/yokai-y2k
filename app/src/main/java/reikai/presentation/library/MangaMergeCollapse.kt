@@ -28,8 +28,8 @@ object MangaMergeCollapse {
         // fallback, briefly over-reporting from the primary's own count; telling the two apart would
         // need a backfill marker, and any group gaining an unread chapter corrects it.
         mergedUnreadByGroup: Map<Long, Long> = emptyMap(),
-        // Group id -> merged chapters with a copy on disk. Absent means the group holds none; empty
-        // means nothing probed it, where the members' own counts are summed as before.
+        // Group id -> merged chapters with a copy on disk. A stitched group always has an entry, zero
+        // included, so an absent one has not been stitched and keeps the members' own sum.
         mergedDownloadsByGroup: Map<Long, Int> = emptyMap(),
         // Mirrors the unread-badge preference, so a merged count never lights a badge the user turned off.
         showUnreadBadge: Boolean = true,
@@ -75,7 +75,7 @@ object MangaMergeCollapse {
                             null
                         },
                         mergedDownloads = if (groupId != null && mergedDownloadsByGroup.isNotEmpty()) {
-                            mergedDownloadsByGroup[groupId] ?: 0
+                            mergedDownloadsByGroup[groupId]
                         } else {
                             null
                         },
