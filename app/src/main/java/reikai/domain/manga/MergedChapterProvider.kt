@@ -41,6 +41,9 @@ class MergedChapterProvider(
         val sourceNameByMangaId: Map<Long, String>,
         /** Chapters unread on their own row but already read on another grouped source. */
         val readInOtherSources: Set<Long> = emptySet(),
+        /** The stored stitch behind [chapters], so a reader acting on a row can reach the group's
+         *  other copies of it without matching numbers the sources disagree on. */
+        val stitch: List<ChapterUnit> = emptyList(),
     ) {
         val isMerged: Boolean get() = mangaById.size > 1
     }
@@ -65,6 +68,7 @@ class MergedChapterProvider(
             chapters = merged,
             sourceNameByMangaId = sourceNameByMangaId,
             readInOtherSources = readOnAnotherSource(pooled, merged, stitch, { it.id }, { it.read }),
+            stitch = stitch,
         )
     }
 

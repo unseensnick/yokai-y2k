@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.expandToUnits
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
@@ -562,18 +563,18 @@ class NovelReaderViewModel(
                 // it isn't merged, so a single-source read is unchanged.
                 val markDupes = libraryPreferences.markDuplicateReadChapterAsRead.get()
                     .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
-                val key = chapter?.let(NovelChapterAggregation::matchKey)
-                val toMark = if (chapter != null && markDupes && key != null) {
-                    // The same identity the unified list matches on. Comparing chapter numbers marked
-                    // the wrong chapter, because a number is whatever its own source counted: two
-                    // sources of one novel are routinely several apart.
-                    val siblings = mergeManager.relatedIdsList(novelId)
-                        .takeIf { it.size > 1 }
-                        ?.flatMap { chapterRepo.getByNovelId(it) }
-                        ?.filter {
-                            it.id != id && !it.read && NovelChapterAggregation.matchKey(it) == key
-                        }
-                        .orEmpty()
+                val toMark = if (chapter != null && markDupes) {
+                    // The stored stitch decides which rows are this chapter, the same answer the list
+                    // and the badge read. Comparing chapter numbers marked the wrong one, because a
+                    // number is whatever its own source counted: two sources are routinely apart.
+                    val copies = expandToUnits(setOf(id), mergedChapterProvider.stitchOf(novelId)) - id
+                    val siblings = if (copies.isEmpty()) {
+                        emptyList()
+                    } else {
+                        mergeManager.relatedIdsList(novelId)
+                            .flatMap { chapterRepo.getByNovelId(it) }
+                            .filter { it.id in copies && !it.read }
+                    }
                     listOf(chapter) + siblings
                 } else {
                     listOfNotNull(chapter)

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import reikai.domain.category.GetNovelCategories
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.expandToUnits
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
@@ -676,21 +677,22 @@ class NovelReaderScreenModel(
                 // Fetch before marking so the shared interactor sees the chapter as still unread; it flips
                 // read + honors "delete after marked as read" (the in-RAM htmlCache keeps this view alive).
                 val chapter = chapterRepo.getById(id)
-                // Mark same-numbered unread chapters across the merged group read too, mirroring the
-                // manga reader (ReaderViewModel.updateChapterProgressOnComplete), gated on the shared
-                // markDuplicateReadChapterAsRead pref. relatedIdsList returns just this novel when
-                // it isn't merged, so a single-source read is unchanged.
+                // Mark the merged group's other copies of this chapter read too, mirroring the manga
+                // reader (ReaderViewModel.updateChapterProgressOnComplete), gated on the shared
+                // markDuplicateReadChapterAsRead pref. The stored stitch decides which rows those are:
+                // a chapter number is whatever its own source counted, so matching on it marked a
+                // chapter several along on the sibling.
                 val markDupes = libraryPreferences.markDuplicateReadChapterAsRead.get()
                     .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
                 val toMark = if (chapter != null && markDupes) {
-                    val siblings = mergeManager.relatedIdsList(novelId)
-                        .takeIf { it.size > 1 }
-                        ?.flatMap { chapterRepo.getByNovelId(it) }
-                        ?.filter {
-                            it.id != id && !it.read && it.chapterNumber >= 0.0 &&
-                                it.chapterNumber == chapter.chapterNumber
-                        }
-                        .orEmpty()
+                    val copies = expandToUnits(setOf(id), mergedChapterProvider.stitchOf(novelId)) - id
+                    val siblings = if (copies.isEmpty()) {
+                        emptyList()
+                    } else {
+                        mergeManager.relatedIdsList(novelId)
+                            .flatMap { chapterRepo.getByNovelId(it) }
+                            .filter { it.id in copies && !it.read }
+                    }
                     listOf(chapter) + siblings
                 } else {
                     listOfNotNull(chapter)

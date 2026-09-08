@@ -75,6 +75,7 @@ import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
 import reikai.domain.manga.MangaPreferences
 import reikai.domain.manga.MergedChapterProvider
+import reikai.domain.merge.expandToUnits
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.ReaderPosition
 import reikai.domain.reader.isChapterComplete
@@ -799,18 +800,14 @@ class ReaderViewModel(
             .contains(LibraryPreferences.MARK_DUPLICATE_CHAPTER_READ_EXISTING)
         if (!markDuplicateAsRead) return
 
+        // RK: the group's other copies of THIS chapter, taken from the stored stitch rather than by
+        // matching numbers: two sources of one series count differently, so a number match marked a
+        // chapter several along on the sibling. Empty when unmerged, which is the upstream behaviour.
+        val readChapterId = readerChapter.chapter.id ?: return
+        val copies = groupCopyIds(readChapterId).toSet()
         val duplicateUnreadChapters = unfilteredChapterList
-            .mapNotNull { chapter ->
-                if (
-                    !chapter.read &&
-                    chapter.isRecognizedNumber &&
-                    chapter.chapterNumber.toFloat() == readerChapter.chapter.chapter_number
-                ) {
-                    ChapterUpdate(id = chapter.id, read = true)
-                } else {
-                    null
-                }
-            }
+            .filter { !it.read && it.id in copies && it.id != readChapterId }
+            .map { ChapterUpdate(id = it.id, read = true) }
         updateChapter.awaitAll(duplicateUnreadChapters)
     }
 
@@ -1110,17 +1107,12 @@ class ReaderViewModel(
 
     // RK: every source's copy of a chapter within the merge group, so a read or bookmark from the chapter
     // sheet applies group-wide like the details screen's does, instead of only to the source the row came
-    // from. Matched on the chapter number narrowed to Float, the same identity the reader's
-    // mark-duplicates-read pass and the library's deduplicated unread count use. Falls back to the
-    // chapter alone when unmerged or when its number is unrecognised and so cannot be matched.
+    // from. Reads the stored stitch, which is the one place that decides what "the same chapter" means:
+    // matching on the number instead reached a chapter several along on a sibling source, and collapsed
+    // every gallery source's chapter 1 into one. Falls back to the chapter alone when unmerged.
     private fun groupCopyIds(chapterId: Long): List<Long> {
-        val chapter = unfilteredChapterList.find { it.id == chapterId } ?: return listOf(chapterId)
-        if (mergedGroup?.isMerged != true || !chapter.isRecognizedNumber) return listOf(chapterId)
-        val number = chapter.chapterNumber.toFloat()
-        return unfilteredChapterList
-            .filter { it.isRecognizedNumber && it.chapterNumber.toFloat() == number }
-            .map { it.id }
-            .ifEmpty { listOf(chapterId) }
+        val stitch = mergedGroup?.takeIf { it.isMerged }?.stitch ?: return listOf(chapterId)
+        return expandToUnits(setOf(chapterId), stitch).toList().ifEmpty { listOf(chapterId) }
     }
 
     /** Toggle the bookmark of an arbitrary chapter from the chapter dialog (Y10). */
