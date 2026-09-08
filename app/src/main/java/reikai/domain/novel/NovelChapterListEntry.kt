@@ -1,8 +1,7 @@
 package reikai.domain.novel
 
+import reikai.domain.merge.ChapterGap
 import reikai.domain.novel.model.NovelChapter
-import tachiyomi.domain.chapter.service.calculateChapterGap
-import kotlin.math.floor
 
 /**
  * A row in the novel details chapter list: either a chapter or a "N missing chapters" separator
@@ -43,11 +42,7 @@ private fun missingSeparator(
     val (lowerChapter, higherChapter) = if (sortDescending) after to before else before to after
     if (higherChapter == null) return null
 
-    val count = if (lowerChapter == null) {
-        floor(higherChapter.chapterNumber).toInt().minus(1).coerceAtLeast(0)
-    } else {
-        calculateChapterGap(higherChapter.chapterNumber, lowerChapter.chapterNumber)
-    }
+    val count = ChapterGap.between(higherChapter.toGapNeighbour(), lowerChapter?.toGapNeighbour())
     return count.takeIf { it > 0 }?.let {
         NovelChapterListEntry.Missing(
             id = "${lowerChapter?.id}-${higherChapter.id}",
@@ -55,3 +50,11 @@ private fun missingSeparator(
         )
     }
 }
+
+/** A merged list's neighbours can come from different sources, so the owning novel travels with the
+ *  number the gap is computed from. */
+private fun NovelChapter.toGapNeighbour() = ChapterGap.Neighbour(chapterNumber, name, novelId)
+
+/** The header's total, over the same rule the inline markers use, so the two cannot disagree. */
+fun novelMissingChapterCount(chapters: List<NovelChapter>, sortDescending: Boolean): Int =
+    ChapterGap.total(chapters.map { it.toGapNeighbour() }, sortDescending)

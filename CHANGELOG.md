@@ -210,6 +210,7 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 
 - **A grouped series' chapter list now reads straight down instead of alternating between its sources.** Two sources rarely agree on what number a chapter is, so the list was being ordered by a number that means something different on each one, on manga and novels alike.
 - **Finishing a chapter now marks that same chapter read on the group's other sources, not one a few along.** It matched on chapter number, which two sources of one series routinely disagree about.
+- **"Missing N chapters" no longer invents gaps on a grouped series, on manga and novels alike.** It compared numbers across two sources that count differently, and believed a volume extra's title enough to claim hundreds were missing.
 - **The app no longer freezes on the Library while light-novel plugins are being set up.** It could hang long enough for Android to offer to close it, most often on a slow or freshly started device.
 - **Selecting a range of chapters no longer leaves a hole where you dropped one.** Dropping a chapter out of the middle of a range and then extending it skipped the chapter you had dropped, on manga and novels alike.
 - **Manga and novel chapter lists now answer a range selection the same way.** The two screens filled a range differently, so the same three presses gave you different chapters depending on which you were reading.

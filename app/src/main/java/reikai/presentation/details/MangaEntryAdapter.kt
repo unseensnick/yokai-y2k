@@ -16,8 +16,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import reikai.domain.entry.EntryId
+import reikai.domain.merge.ChapterGap
 import tachiyomi.domain.chapter.model.Chapter
-import tachiyomi.domain.chapter.service.missingChaptersCount
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.withCustomInfo
@@ -79,9 +79,14 @@ class MangaEntryAdapter(
             ),
             chapters = EntryChapterListUiState(
                 items = chapterListItems.map { it.toNeutralItem() },
-                // Match the chapter header: the real gap count across the processed list, computed from the
-                // chapter numbers (unchanged when the "hide missing" pref drops the separators from the rows).
-                missingChapterCount = processedChapters.map { it.chapter.chapterNumber }.missingChaptersCount(),
+                // The same rule the inline markers use, so the two cannot disagree, and unchanged when
+                // the "hide missing" pref drops the separators from the rows.
+                missingChapterCount = ChapterGap.total(
+                    processedChapters.map {
+                        ChapterGap.Neighbour(it.chapter.chapterNumber, it.chapter.name, it.chapter.mangaId)
+                    },
+                    descending = manga.sortDescending(),
+                ),
                 showHidden = showHidden,
                 hasHiddenChapters = hasHiddenChapters,
                 hiddenChapterIds = hiddenChapterIds,

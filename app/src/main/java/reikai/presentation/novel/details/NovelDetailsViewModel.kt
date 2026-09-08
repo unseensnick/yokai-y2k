@@ -83,6 +83,7 @@ import reikai.domain.novel.model.effectiveReadFilter
 import reikai.domain.novel.model.effectiveSortDescending
 import reikai.domain.novel.model.effectiveSorting
 import reikai.domain.novel.model.sortedAndFiltered
+import reikai.domain.novel.novelMissingChapterCount
 import reikai.domain.novel.track.TrackNovelChapter
 import reikai.domain.novel.track.toUiTrack
 import reikai.novel.download.NovelDownload
@@ -119,7 +120,6 @@ import tachiyomi.core.common.util.lang.launchUI
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.data.Database
 import tachiyomi.domain.category.model.Category
-import tachiyomi.domain.chapter.service.missingChaptersCount
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.track.model.Track
@@ -501,8 +501,10 @@ class NovelDetailsViewModel(
         val nonHidden = if (hidden.isEmpty()) chapters else chapters.filterNot { hiddenKey(it) in hidden }
         val display = view.visible.sortedAndFiltered(anchor, novelPreferences, downloadedChapterIds)
         val sortDescending = anchor.effectiveSortDescending(novelPreferences)
-        // Header total is always shown when > 0; the inline gap separators are gated by the pref.
-        val missingChapterCount = display.map { it.chapterNumber }.missingChaptersCount()
+        // The header total is the sum of the gaps the list itself would mark, so the two can never
+        // disagree: counting the pooled numbers instead claimed gaps between chapters of different
+        // sources, which count differently. Always shown when > 0; the inline rows are pref-gated.
+        val missingChapterCount = novelMissingChapterCount(display, sortDescending)
         val chapterListEntries = if (novelPreferences.hideMissingChapters().get()) {
             display.map { NovelChapterListEntry.Item(it) }
         } else {

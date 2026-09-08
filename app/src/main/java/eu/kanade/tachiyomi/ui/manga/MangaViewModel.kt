@@ -95,6 +95,7 @@ import reikai.domain.manga.GetTracksInGroup
 import reikai.domain.manga.MangaMergeManager
 import reikai.domain.manga.MangaPreferences
 import reikai.domain.manga.MergedChapterProvider
+import reikai.domain.merge.ChapterGap
 import reikai.domain.recommendation.BuildRecommendationHideFilter
 import reikai.domain.recommendation.RECOMMENDS_SOURCE
 import reikai.domain.recommendation.RecommendationHideFilter
@@ -1927,14 +1928,10 @@ class MangaViewModel(
                     }
                     if (higherChapter == null) return@insertSeparators null
 
-                    if (lowerChapter == null) {
-                        floor(higherChapter.chapter.chapterNumber)
-                            .toInt()
-                            .minus(1)
-                            .coerceAtLeast(0)
-                    } else {
-                        calculateChapterGap(higherChapter.chapter, lowerChapter.chapter)
-                    }
+                    // RK: through the shared rule, which declines a gap whose two sides come from
+                    // different sources of a group, or whose number the name does not support.
+                    ChapterGap
+                        .between(higherChapter.chapter.toGapNeighbour(), lowerChapter?.chapter?.toGapNeighbour())
                         .takeIf { it > 0 }
                         ?.let { missingCount ->
                             ChapterList.MissingCount(
@@ -2020,3 +2017,7 @@ private fun EntryEditInfoUi.toCustomMangaInfo(source: Manga) = CustomMangaInfo(
     status = status.takeIf { it != source.status && it != SManga.UNKNOWN.toLong() },
     thumbnailUrl = thumbnailUrl.trim().takeIf { it.isNotEmpty() && it != source.thumbnailUrl.orEmpty() },
 )
+
+// RK: a merged list's neighbours can come from different sources, so the owning manga travels with
+// the number the gap is computed from.
+private fun Chapter.toGapNeighbour() = ChapterGap.Neighbour(chapterNumber, name, mangaId)
