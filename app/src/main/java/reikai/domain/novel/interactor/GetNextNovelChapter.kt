@@ -15,7 +15,7 @@ data class NovelGroupChapters(
     /** The stored stitch behind [chapters], and every member's chapters, so a caller can ask a
      *  cross-source question (bookmarked anywhere, on disk anywhere) about the copies it stands in for. */
     val stitch: List<ChapterUnit> = emptyList(),
-    val pooled: List<NovelChapter> = chapters,
+    val pooledChapters: List<NovelChapter> = chapters,
 )
 
 /**
@@ -55,7 +55,7 @@ class GetNextNovelChapter(
             chapters = unified,
             readInOtherSources = flaggedOnAnotherSource(pooled, unified, stitch, { it.id }, { it.read }),
             stitch = stitch,
-            pooled = pooled,
+            pooledChapters = pooled,
         )
     }
 

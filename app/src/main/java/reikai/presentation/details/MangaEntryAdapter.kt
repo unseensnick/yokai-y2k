@@ -189,7 +189,9 @@ class MangaEntryAdapter(
     }
 
     override fun toggleChapterBookmark(chapterId: Long) {
-        chapterById(chapterId)?.let { model.bookmarkChapters(listOf(it), !it.bookmark) }
+        // Toggled against what the row shows, which on a merged entry is the group's own state.
+        val item = itemById(chapterId) ?: return
+        model.bookmarkChapters(listOf(item.chapter), !item.isBookmarked)
     }
 
     override fun runDownloadAction(action: DownloadAction) {

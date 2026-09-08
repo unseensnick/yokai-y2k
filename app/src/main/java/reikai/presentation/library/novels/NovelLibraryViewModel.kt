@@ -532,18 +532,13 @@ class NovelLibraryViewModel(
                 val downloadManager = novelDownloadManager()
                 // Probed over every member's chapters: a chapter downloaded on any of them is on disk,
                 // whichever copy the stitch shows.
-                val novelsById = group.pooled.map { it.novelId }.distinct()
+                val novelsById = group.pooledChapters.map { it.novelId }.distinct()
                     .mapNotNull { novelId -> novelRepository.getById(novelId)?.let { novelId to it } }
                     .toMap()
-                val downloadedIds = group.pooled
-                    .groupBy { it.novelId }
-                    .flatMapTo(HashSet()) { (novelId, chapters) ->
-                        novelsById[novelId]?.let { novel ->
-                            chapters.filter { downloadManager.isChapterDownloaded(novel, it) }
-                        }
-                            .orEmpty()
-                            .map { it.id }
-                    }
+                val downloadedIds = group.pooledChapters.mapNotNullTo(HashSet()) { chapter ->
+                    val novel = novelsById[chapter.novelId] ?: return@mapNotNullTo null
+                    chapter.id.takeIf { downloadManager.isChapterDownloaded(novel, chapter) }
+                }
                 val onDisk = downloadedIds + group.flaggedElsewhere { it.id in downloadedIds }
                 val queuedIds = downloadManager.queueState.value.mapTo(HashSet()) { it.chapterId }
                 val targets = selectChaptersForDownloadAction(
@@ -559,7 +554,7 @@ class NovelLibraryViewModel(
     }
 
     private fun NovelGroupChapters.flaggedElsewhere(flag: (NovelChapter) -> Boolean): Set<Long> =
-        flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }, flag)
+        flaggedOnAnotherSource(pooledChapters, chapters, stitch, { it.id }, flag)
 
     /** Writes exactly the ids it is handed; the caller expands the merge group. */
     fun setNovelCategories(novelIds: List<Long>, addCategories: List<Long>, removeCategories: List<Long>) {

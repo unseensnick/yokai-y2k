@@ -14,6 +14,7 @@ import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.tachiyomi.data.download.model.Download
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import reikai.domain.category.RecentsSurface
 import reikai.domain.category.recentsCategoryFilterFlow
 import reikai.domain.entry.EntryId
@@ -625,11 +627,13 @@ class RecentsEngine(
     }
 
     /** The verbs are suspend because a merged row's action has to read the group's stitch first; the
-     *  selection still clears at once, so the bar closes on the tap rather than on the write. Launched
-     *  undispatched, since each provider moves its own work off the main thread where it does any. */
+     *  selection still clears at once, so the bar closes on the tap rather than on the write. That read
+     *  is what makes the write outlive the screen: leaving it during the stitch read would otherwise
+     *  drop a write the bar has already reported as done. Each provider moves its own work off the main
+     *  thread, so this starts where the tap did rather than costing a dispatch. */
     private fun dispatch(action: suspend (RecentsChapterActions) -> Unit) {
         val targets = activeProviders().mapNotNull { it.chapterActions }
-        viewModelScope.launch { targets.forEach { action(it) } }
+        viewModelScope.launch { withContext(NonCancellable) { targets.forEach { action(it) } } }
     }
 
     private fun dispatchAndClear(action: suspend (RecentsChapterActions) -> Unit) {

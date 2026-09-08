@@ -75,7 +75,9 @@ import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
 import reikai.domain.manga.MangaPreferences
 import reikai.domain.manga.MergedChapterProvider
+import reikai.domain.manga.downloadedChapterIds
 import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.reader.ReaderPosition
 import reikai.domain.reader.isChapterComplete
@@ -244,6 +246,25 @@ class ReaderViewModel(
     private fun mangaForChapterId(chapterMangaId: Long?): Manga =
         chapterMangaId?.let { mergedGroup?.mangaById?.get(it) } ?: manga!!
 
+    /** RK: read, bookmarked and on disk as the group answers them, for the rows in [shown]. Resolved
+     *  against [shown] rather than reused from the group, whose own set names the rows the merged list
+     *  shows: in source scope those are not the rows here, and the answer came back empty. */
+    private class GroupFlags(val read: Set<Long>, val bookmarked: Set<Long>, val downloaded: Set<Long>)
+
+    private fun flagsInOtherSources(group: MergedChapterProvider.Group?, shown: List<Chapter>): GroupFlags {
+        val pooled = group?.pooledChapters ?: shown
+        val downloaded = downloadManager.downloadedChapterIds(pooled) { mangaForChapterId(it.mangaId) }
+        if (group == null) {
+            return GroupFlags(read = emptySet(), bookmarked = emptySet(), downloaded = downloaded)
+        }
+        return GroupFlags(
+            read = flaggedOnAnotherSource(pooled, shown, group.stitch, { it.id }, { it.read }),
+            bookmarked = flaggedOnAnotherSource(pooled, shown, group.stitch, { it.id }, { it.bookmark }),
+            downloaded = downloaded +
+                flaggedOnAnotherSource(pooled, shown, group.stitch, { it.id }) { it.id in downloaded },
+        )
+    }
+
     // RK: per-source "is this chapter downloaded" check for the transition card. Resolves the
     // chapter's OWN merged source, and uses the in-memory download cache (skipCache = false) instead
     // of a storage-access probe, so the card binds once with the right value: no main-thread stutter
@@ -318,42 +339,23 @@ class ReaderViewModel(
         val chaptersForReader = when {
             applyReadFilter &&
                 (readerPreferences.skipRead.get() || readerPreferences.skipFiltered.get()) -> {
-                // RK: read on any of the group's sources, the same rule the details list and the
-                // library badge apply, so "skip read" skips what the user is shown as read.
-                val readElsewhere = mergedGroup?.readInOtherSources.orEmpty()
+                // RK: read, bookmarked and on disk are asked of the whole group here, the same rule the
+                // details list and the library badge apply, so a filter matches what the user is shown.
+                // The filter PREFS stay the opened manga's, which is the user's current context.
+                val flags = flagsInOtherSources(mergedGroup, chapters)
                 val filteredChapters = chapters.filterNot {
-                    // RK: the filter PREFS stay the opened manga's (the user's current context), but
-                    // the downloaded check resolves to each chapter's OWN source so a merged chapter
-                    // is probed in the right download folder.
-                    val chapterManga = mangaForChapterId(it.mangaId)
-                    val isRead = it.read || it.id in readElsewhere
+                    val isRead = it.read || it.id in flags.read
+                    val isBookmarked = it.bookmark || it.id in flags.bookmarked
+                    val isDownloaded = it.id in flags.downloaded
                     when {
                         readerPreferences.skipRead.get() && isRead -> true
                         readerPreferences.skipFiltered.get() -> {
                             (manga.unreadFilterRaw == Manga.CHAPTER_SHOW_READ && !isRead) ||
                                 (manga.unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD && isRead) ||
-                                (
-                                    manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_DOWNLOADED &&
-                                        !downloadManager.isChapterDownloaded(
-                                            it.name,
-                                            it.scanlator,
-                                            it.url,
-                                            chapterManga.title,
-                                            chapterManga.source,
-                                        )
-                                    ) ||
-                                (
-                                    manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_NOT_DOWNLOADED &&
-                                        downloadManager.isChapterDownloaded(
-                                            it.name,
-                                            it.scanlator,
-                                            it.url,
-                                            chapterManga.title,
-                                            chapterManga.source,
-                                        )
-                                    ) ||
-                                (manga.bookmarkedFilterRaw == Manga.CHAPTER_SHOW_BOOKMARKED && !it.bookmark) ||
-                                (manga.bookmarkedFilterRaw == Manga.CHAPTER_SHOW_NOT_BOOKMARKED && it.bookmark)
+                                (manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_DOWNLOADED && !isDownloaded) ||
+                                (manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_NOT_DOWNLOADED && isDownloaded) ||
+                                (manga.bookmarkedFilterRaw == Manga.CHAPTER_SHOW_BOOKMARKED && !isBookmarked) ||
+                                (manga.bookmarkedFilterRaw == Manga.CHAPTER_SHOW_NOT_BOOKMARKED && isBookmarked)
                         }
                         else -> false
                     }
@@ -390,6 +392,7 @@ class ReaderViewModel(
                         numberOf = { it.chapterNumber },
                         idOf = { it.id },
                         originOf = { it.scanlator },
+                        ownerOf = { it.mangaId },
                     )
                 } else {
                     this
@@ -699,15 +702,16 @@ class ReaderViewModel(
             if (!isNextChapterDownloaded) return@launchIO
 
             // RK: on a merged series the chapters ahead belong to whichever sources carry them, so the
-            // target is the reader's own cross-source list rather than the next chapter's source alone.
-            // It is already deduplicated by the stitch, which is why the skip-duplicates pass below is
-            // the unmerged path's only.
-            val chaptersToDownload = if (mergedGroup?.isMerged == true) {
-                val readElsewhere = mergedGroup?.readInOtherSources.orEmpty()
-                fullChapterList.asSequence()
-                    .dropWhile { it.chapter.id != nextChapter.id }
-                    .mapNotNull { it.chapter.toDomainChapter() }
-                    .filterNot { it.read || it.id in readElsewhere }
+            // target is the group's own cross-source list rather than the next chapter's source alone.
+            // The group's list, not the reader's: that one is narrowed by the display filters, and in
+            // downloaded-only mode it holds nothing left to fetch.
+            // The group's list can only answer for a chapter it kept: a source-scoped session reads its
+            // own source's rows, and the stitch may stand in for this one with a sibling's copy.
+            val group = mergedGroup?.takeIf { it.isMerged && it.chapters.any { c -> c.id == nextChapter.id } }
+            val chaptersToDownload = if (group != null) {
+                group.chapters.asReversed().asSequence()
+                    .dropWhile { it.id != nextChapter.id }
+                    .filterNot { it.read || it.id in group.readInOtherSources }
                     .take(downloadAheadAmount)
                     .toList()
             } else {
@@ -718,6 +722,7 @@ class ReaderViewModel(
                             numberOf = { it.chapterNumber },
                             idOf = { it.id },
                             originOf = { it.scanlator },
+                            ownerOf = { it.mangaId },
                         )
                     } else {
                         this

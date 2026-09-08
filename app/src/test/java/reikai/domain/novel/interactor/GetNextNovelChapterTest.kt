@@ -81,6 +81,18 @@ class GetNextNovelChapterTest {
     }
 
     @Test
+    fun `the added-lane fallback skips a chapter another source has read`() = runTest {
+        // The lane falls back to this novel's own rows when the group list yields no unread, so it has
+        // to be told what the group already counts as read or the tap reopens a finished chapter.
+        coEvery { chapterRepository.getByNovelId(1L) } returns listOf(
+            chapter(10, 0, read = false),
+            chapter(11, 1, read = false),
+        )
+
+        interactor.awaitFirstUnread(novelId = 1L, readInOtherSources = setOf(10L))?.id shouldBe 11L
+    }
+
+    @Test
     fun `an unmerged novel resolves its own first unread`() = runTest {
         coEvery { chapterRepository.getByNovelId(1L) } returns listOf(
             chapter(10, 0, read = true),

@@ -143,10 +143,6 @@ class NovelReaderScreenModel(
      *  a skipped chapter stays reachable from the one after it. Built with [orderedIds]. */
     private var forwardEligibleIds: Set<Long> = emptySet()
 
-    /** Chapters unread on their own row but read on another source of the merge group, resolved with
-     *  [orderedIds]. "Skip read" means the group's read state, as every other surface reads it. */
-    private var readInOtherSources: Set<Long> = emptySet()
-
     private val skipDupePref = novelPreferences.readerSkipDuplicateChapters()
     private val skipReadPref = novelPreferences.readerSkipRead()
     private val skipFilteredPref = novelPreferences.readerSkipFiltered()
@@ -437,6 +433,7 @@ class NovelReaderScreenModel(
             numberOf = { it.chapterNumber },
             idOf = { it.id },
             originOf = { sourceIdByNovel[it.novelId] },
+            ownerOf = { it.novelId },
         )
     }
 
@@ -746,25 +743,35 @@ class NovelReaderScreenModel(
      * thing here as on the details screen. The open chapter always stays eligible, so opening a filtered
      * chapter directly does not strand the reader on it.
      */
-    private suspend fun resolveForwardEligible(chapters: List<NovelChapter>): Set<Long> {
+    private suspend fun resolveForwardEligible(
+        chapters: List<NovelChapter>,
+        pooled: List<NovelChapter>,
+        stitch: List<ChapterUnit>,
+        readInOtherSources: Set<Long>,
+    ): Set<Long> {
         val skipRead = skipReadPref.get()
         val skipFiltered = skipFilteredPref.get()
         if (!skipRead && !skipFiltered) return chapters.mapTo(HashSet()) { it.id }
         val novel = novelRepo.getById(novelId) ?: return chapters.mapTo(HashSet()) { it.id }
-        val downloaded = if (skipFiltered) downloadedChapterIds(chapters) else emptySet()
+        // Bookmarked and on disk are asked of the whole group, as read already is: the details list
+        // answers them that way, so a filter shared with it has to reach the same rows.
+        val onDisk = if (skipFiltered) downloadedChapterIds(pooled.ifEmpty { chapters }) else emptySet()
+        val downloaded = onDisk + flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }) { it.id in onDisk }
+        val bookmarked = flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }, { it.bookmark })
         val readFilter = novel.effectiveReadFilter(novelPreferences)
         val bookmarkFilter = novel.effectiveBookmarkedFilter(novelPreferences)
         val downloadFilter = novel.effectiveDownloadedFilter(novelPreferences)
         return chapters.filterTo(HashSet()) { ch ->
             val isRead = ch.read || ch.id in readInOtherSources
+            val isBookmarked = ch.bookmark || ch.id in bookmarked
             when {
                 ch.id == currentId -> true
                 skipRead && isRead -> false
                 !skipFiltered -> true
                 readFilter == NovelChapterFlags.SHOW_UNREAD && isRead -> false
                 readFilter == NovelChapterFlags.SHOW_READ && !isRead -> false
-                bookmarkFilter == NovelChapterFlags.SHOW_BOOKMARKED && !ch.bookmark -> false
-                bookmarkFilter == NovelChapterFlags.SHOW_NOT_BOOKMARKED && ch.bookmark -> false
+                bookmarkFilter == NovelChapterFlags.SHOW_BOOKMARKED && !isBookmarked -> false
+                bookmarkFilter == NovelChapterFlags.SHOW_NOT_BOOKMARKED && isBookmarked -> false
                 downloadFilter == NovelChapterFlags.SHOW_DOWNLOADED && ch.id !in downloaded -> false
                 downloadFilter == NovelChapterFlags.SHOW_NOT_DOWNLOADED && ch.id in downloaded -> false
                 else -> true
@@ -807,8 +814,8 @@ class NovelReaderScreenModel(
                 // always kept (filterHiddenChapters guards currentId).
                 val visible = filterHiddenChapters(resolved)
                 orderedIds = visible.map { it.id }
-                readInOtherSources = flaggedOnAnotherSource(pooled, visible, stitch, { it.id }, { it.read })
-                forwardEligibleIds = resolveForwardEligible(visible)
+                val readElsewhere = flaggedOnAnotherSource(pooled, visible, stitch, { it.id }, { it.read })
+                forwardEligibleIds = resolveForwardEligible(visible, pooled, stitch, readElsewhere)
             }
             val id = currentId
             val chapter = chapterRepo.getById(id) ?: error("Chapter not found")

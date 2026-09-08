@@ -26,6 +26,7 @@ import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.manga.MangaMergeManager
 import reikai.domain.manga.MergedChapterProvider
 import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.recents.RecentlyAddedManga
 import reikai.domain.recents.RecentlyAddedRepository
@@ -157,8 +158,8 @@ class MangaRecentsAdapter(
             ref = ChapterRef(EntryId.Manga(owner.id), chapter.id),
             chapter = RecentsChapterUi.Number(chapter.chapterNumber),
             state = chapterState(
-                read = chapter.read,
-                bookmark = chapter.bookmark,
+                read = chapter.read || chapter.id in resolved.readElsewhere,
+                bookmark = chapter.bookmark || chapter.id in resolved.bookmarkedElsewhere,
                 progress = ChapterProgress.Pages(chapter.lastPageRead, chapter.pageCount),
             ),
             download = chapterDownloadUi(
@@ -177,6 +178,10 @@ class MangaRecentsAdapter(
         val chapterId: Long,
         val chapters: Map<Long, Chapter>,
         val mangaById: Map<Long, Manga>,
+        /** Read or bookmarked on another source of the group, so the row says what the details list
+         *  says rather than what the one copy the target rule picked happens to hold. */
+        val readElsewhere: Set<Long> = emptySet(),
+        val bookmarkedElsewhere: Set<Long> = emptySet(),
     )
 
     /**
@@ -216,7 +221,15 @@ class MangaRecentsAdapter(
                     ?.also { chapters[it.id] = it }
                     ?.id
         } ?: return null
-        return TargetResolution(chapterId, chapters, group?.mangaById.orEmpty())
+        return TargetResolution(
+            chapterId = chapterId,
+            chapters = chapters,
+            mangaById = group?.mangaById.orEmpty(),
+            readElsewhere = readElsewhere,
+            bookmarkedElsewhere = group?.let {
+                flaggedOnAnotherSource(it.pooledChapters, it.chapters, it.stitch, { c -> c.id }, { c -> c.bookmark })
+            }.orEmpty(),
+        )
     }
 
     /**
@@ -253,7 +266,7 @@ class MangaRecentsAdapter(
 
         // The group's copies of the same merged chapters, off the stored stitch, so a collapsed row's
         // verb reaches every source the way the details list's does.
-        private suspend fun Set<ChapterRef>.groupIds(): List<Long> = withIOContext {
+        private suspend fun Set<ChapterRef>.groupChapterIds(): List<Long> = withIOContext {
             filter { it.entryId is EntryId.Manga }
                 .groupBy { it.entryId.rawId }
                 .flatMap { (mangaId, refs) ->
@@ -263,11 +276,11 @@ class MangaRecentsAdapter(
         }
 
         override suspend fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
-            model.markUpdatesRead(chapters.groupIds(), read)
+            model.markUpdatesRead(chapters.groupChapterIds(), read)
         }
 
         override suspend fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
-            model.bookmarkUpdates(chapters.groupIds(), bookmarked)
+            model.bookmarkUpdates(chapters.groupChapterIds(), bookmarked)
         }
 
         override suspend fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
@@ -275,7 +288,7 @@ class MangaRecentsAdapter(
         }
 
         override suspend fun deleteDownloads(chapters: Set<ChapterRef>) {
-            model.deleteChapters(chapters.groupIds())
+            model.deleteChapters(chapters.groupChapterIds())
         }
     }
 

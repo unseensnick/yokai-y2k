@@ -161,6 +161,17 @@ class MergedCountConformanceTest {
     }
 
     @Test
+    @DisplayName("manga: a chapter read on one source is not unread on the group")
+    fun mangaReadOnOneSourceAgrees() = runTest {
+        val rows = listOf(
+            Row(id = 10, owner = 1, name = "Chapter 1", number = 1.0),
+            Row(id = 20, owner = 2, name = "Chapter 1", number = 1.0, read = true),
+        )
+
+        mangaBadgeCount(rows) shouldBe mangaListCount(rows)
+    }
+
+    @Test
     @DisplayName("manga: a sibling's unnumbered chapter is counted the way the list treats it")
     fun mangaUnrecognizedSiblingAgrees() = runTest {
         // Only the leading source's unnumbered chapters reach the list, since nothing can place a

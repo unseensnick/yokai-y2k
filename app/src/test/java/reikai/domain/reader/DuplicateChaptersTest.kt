@@ -10,10 +10,15 @@ import org.junit.jupiter.api.Test
  */
 class DuplicateChaptersTest {
 
-    private data class Ch(val id: Long, val number: Double, val origin: String?)
+    private data class Ch(val id: Long, val number: Double, val origin: String?, val owner: Long = 1L)
 
-    private fun List<Ch>.dedup(current: Ch) =
-        removeDuplicateChapters(current, numberOf = { it.number }, idOf = { it.id }, originOf = { it.origin })
+    private fun List<Ch>.dedup(current: Ch) = removeDuplicateChapters(
+        current,
+        numberOf = { it.number },
+        idOf = { it.id },
+        originOf = { it.origin },
+        ownerOf = { it.owner },
+    )
 
     private val a1 = Ch(id = 1, number = 1.0, origin = "alpha")
     private val b1 = Ch(id = 2, number = 1.0, origin = "beta")
@@ -52,6 +57,16 @@ class DuplicateChaptersTest {
     @Test
     fun `a list with nothing duplicated is returned unchanged`() {
         listOf(a1, a2).dedup(a1) shouldBe listOf(a1, a2)
+    }
+
+    @Test
+    fun `two sources of a merged entry keep both chapters, however they number them`() {
+        // Across a merge group a number identifies nothing: each source counts its own way, and the
+        // stitch has already decided what is one chapter. Collapsing here ate a distinct chapter.
+        val fromOne = Ch(id = 20, number = 5.0, origin = "alpha", owner = 1L)
+        val fromTwo = Ch(id = 21, number = 5.0, origin = "beta", owner = 2L)
+
+        listOf(fromOne, fromTwo).dedup(fromOne).map { it.id } shouldBe listOf(20L, 21L)
     }
 
     @Test

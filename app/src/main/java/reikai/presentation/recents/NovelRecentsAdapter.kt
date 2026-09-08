@@ -22,6 +22,7 @@ import reikai.domain.entry.EntryId
 import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelMergedChapterProvider
@@ -157,8 +158,8 @@ class NovelRecentsAdapter(
             ref = ChapterRef(EntryId.Novel(owner.id), chapter.id),
             chapter = RecentsChapterUi.Number(chapter.chapterNumber),
             state = chapterState(
-                read = chapter.read,
-                bookmark = chapter.bookmark,
+                read = chapter.read || chapter.id in resolved.readElsewhere,
+                bookmark = chapter.bookmark || chapter.id in resolved.bookmarkedElsewhere,
                 progress = ChapterProgress.Percent(chapter.lastTextProgress),
             ),
             download = chapterDownloadUi(
@@ -171,8 +172,13 @@ class NovelRecentsAdapter(
         )
     }
 
-    /** The twin of the manga adapter's, holding this type's chapters. */
-    private class TargetResolution(val chapterId: Long, val chapters: Map<Long, NovelChapter>)
+    /** The twin of the manga adapter's, holding this type's chapters and the group's flags. */
+    private class TargetResolution(
+        val chapterId: Long,
+        val chapters: Map<Long, NovelChapter>,
+        val readElsewhere: Set<Long> = emptySet(),
+        val bookmarkedElsewhere: Set<Long> = emptySet(),
+    )
 
     /** Merge-aware on all three lanes, the twin of [MangaRecentsAdapter]'s. */
     private suspend fun resolveTarget(item: RecentsItem): TargetResolution? {
@@ -202,7 +208,18 @@ class NovelRecentsAdapter(
                 ?: getNextNovelChapter.awaitFirstUnread(novelId, group.readInOtherSources)
                     ?.also { chapters[it.id] = it }?.id
         } ?: return null
-        return TargetResolution(chapterId, chapters)
+        return TargetResolution(
+            chapterId = chapterId,
+            chapters = chapters,
+            readElsewhere = group.readInOtherSources,
+            bookmarkedElsewhere = flaggedOnAnotherSource(
+                group.pooledChapters,
+                group.chapters,
+                group.stitch,
+                { it.id },
+                { it.bookmark },
+            ),
+        )
     }
 
     private fun NovelChapter.toRecentsChapter(readInOtherSources: Set<Long>) = RecentsChapter(
@@ -225,7 +242,7 @@ class NovelRecentsAdapter(
 
         // The group's copies of the same merged chapters, off the stored stitch. Twin of the manga
         // adapter's, pinned by the one stitch both read.
-        private suspend fun Set<ChapterRef>.groupIds(): List<Long> = withIOContext {
+        private suspend fun Set<ChapterRef>.groupChapterIds(): List<Long> = withIOContext {
             filter { it.entryId is EntryId.Novel }
                 .groupBy { it.entryId.rawId }
                 .flatMap { (novelId, refs) ->
@@ -235,11 +252,11 @@ class NovelRecentsAdapter(
         }
 
         override suspend fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
-            model.markRead(chapters.groupIds(), read)
+            model.markRead(chapters.groupChapterIds(), read)
         }
 
         override suspend fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
-            model.bookmark(chapters.groupIds(), bookmarked)
+            model.bookmark(chapters.groupChapterIds(), bookmarked)
         }
 
         // Per row rather than in one call: this model's batch entry point only ever queues, and the
@@ -249,7 +266,7 @@ class NovelRecentsAdapter(
         }
 
         override suspend fun deleteDownloads(chapters: Set<ChapterRef>) {
-            model.deleteChapters(chapters.groupIds())
+            model.deleteChapters(chapters.groupChapterIds())
         }
     }
 
