@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import reikai.domain.category.GetNovelCategories
-import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.expandToUnits
 import reikai.domain.merge.flaggedOnAnotherSource
@@ -118,7 +117,6 @@ class NovelReaderScreenModel(
 
     // Global novel source ranking, to pick the merge trunk when the reader resolves group scope
     // (matches the details/library aggregation).
-    private val reikaiLibraryPreferences: ReikaiLibraryPreferences by injectLazy()
 
     // novel trackers: push read progress on chapter completion
     private val trackNovelChapter: TrackNovelChapter by injectLazy()

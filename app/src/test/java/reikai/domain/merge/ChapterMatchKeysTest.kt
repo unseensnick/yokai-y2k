@@ -7,41 +7,10 @@ import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.model.NovelChapter
 
 /**
- * The stored match key must agree with what the chapter aggregators treat as "the same chapter",
- * otherwise a merged entry's unread badge and its chapter list disagree.
+ * The novel side's cross-source chapter identity: two sources' rows share a key when they are the
+ * same chapter, which is what the stitch pairs them on before it places the rest by position.
  */
 class ChapterMatchKeysTest {
-
-    @Test
-    fun `two sources reporting the same chapter share a key`() {
-        // One source reports its own 32-bit float, the other's was parsed as a double. They differ
-        // by about 2.4e-8, which is exactly what the Float narrowing exists to collapse.
-        val fromSource = 1.1f.toDouble()
-        val fromRecognition = 1.1
-
-        ChapterMatchKeys.manga(fromSource, isGallerySource = false) shouldBe
-            ChapterMatchKeys.manga(fromRecognition, isGallerySource = false)
-    }
-
-    @Test
-    fun `real sub-chapters stay distinct`() {
-        val first = ChapterMatchKeys.manga(10.1, isGallerySource = false)
-        val second = ChapterMatchKeys.manga(10.2, isGallerySource = false)
-
-        (first == second) shouldBe false
-    }
-
-    @Test
-    fun `an unrecognized number has no cross-source identity`() {
-        ChapterMatchKeys.manga(-1.0, isGallerySource = false).shouldBeNull()
-    }
-
-    @Test
-    fun `a gallery source's chapter has no cross-source identity`() {
-        // Every gallery source numbers its standalone work 1, so keying by number would collapse
-        // two different galleries into one unit.
-        ChapterMatchKeys.manga(1.0, isGallerySource = true).shouldBeNull()
-    }
 
     @Test
     fun `the novel key ignores the chapter-number prefix in a title`() {

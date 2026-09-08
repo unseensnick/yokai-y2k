@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
-import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.expandToUnits
 import reikai.domain.merge.flaggedOnAnotherSource
@@ -99,7 +98,6 @@ class NovelReaderViewModel(
     private val mergeManager: NovelMergeManager,
     private val mergedChapterProvider: NovelMergedChapterProvider,
     private val libraryPreferences: LibraryPreferences,
-    private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
     private val trackNovelChapter: TrackNovelChapter,
     private val trackPreferences: TrackPreferences,
     private val getIncognitoState: GetIncognitoState,

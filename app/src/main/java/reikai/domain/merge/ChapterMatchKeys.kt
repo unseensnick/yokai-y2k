@@ -14,21 +14,6 @@ import tachiyomi.domain.source.service.SourceManager
 object ChapterMatchKeys {
 
     /**
-     * Null when the chapter has no cross-source identity and must never dedup: an unrecognized
-     * number, or a gallery source's chapter (each is a standalone work, and every gallery source
-     * numbers its first one 1, so keying by number would collapse different works into one).
-     * Narrowed to Float for the same reason the aggregation does it: a source-reported number is a
-     * 32-bit float where a parsed one is a double, and the two differ by about 2.4e-8, so an exact
-     * double key would leave the same chapter duplicated across sources.
-     */
-    fun manga(chapterNumber: Double, isGallerySource: Boolean): String? = when {
-        isGallerySource -> null
-        // Mirrors Chapter.isRecognizedNumber, which the row does not store.
-        chapterNumber < 0.0 -> null
-        else -> chapterNumber.toFloat().toString()
-    }
-
-    /**
      * Whether a source's chapters are each a standalone work rather than an instalment.
      *
      * True gallery sources all implement [NamespaceSource], but so does the enhanced MangaDex, which

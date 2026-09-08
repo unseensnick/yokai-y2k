@@ -124,25 +124,6 @@ class MangaMergeManagerTest {
     }
 
     @Test
-    fun `seriesGroupKeys shares a key within a group and separates the rest`() = runTest {
-        val repo = mockk<MergeGroupRepository> {
-            coEvery { getAllMemberships(ContentType.MANGA) } returns mapOf(1L to 7L, 2L to 7L)
-        }
-
-        val keys = manager(repo).seriesGroupKeys(listOf(1L, 2L, 3L))
-
-        keys[1L] shouldBe keys[2L]
-        (keys[1L] == keys[3L]) shouldBe false
-    }
-
-    @Test
-    fun `seriesGroupKeys gives every series its own key when merging is disabled`() = runTest {
-        val keys = manager(mergingEnabled = false).seriesGroupKeys(listOf(1L, 2L))
-
-        (keys[1L] == keys[2L]) shouldBe false
-    }
-
-    @Test
     fun `unmerge hands the whole group to the dissolve hook before dissolving`() = runTest {
         val repo = mockk<MergeGroupRepository>(relaxed = true) {
             coEvery { getGroupId(ContentType.MANGA, 1L) } returns 7L

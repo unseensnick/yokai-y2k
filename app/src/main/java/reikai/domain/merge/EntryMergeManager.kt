@@ -176,20 +176,6 @@ open class EntryMergeManager(
         }
     }
 
-    /**
-     * Group key per favorite id for the Updates group-by-series feature: members of one group share a key
-     * so they collapse together, and every ungrouped series gets its own key. Favorite ids are passed in so
-     * the caller controls the DB read; the memberships come from one batch query.
-     */
-    suspend fun seriesGroupKeys(favoriteIds: List<Long>): Map<Long, String> {
-        val standalonePrefix = if (isNovel) "n" else "m"
-        if (!preferences.seriesMergingEnabled.get()) {
-            return favoriteIds.associateWith { "$standalonePrefix$it" }
-        }
-        val memberships = repository.getAllMemberships(contentType)
-        return favoriteIds.associateWith { id -> memberships[id]?.let { "g$it" } ?: "$standalonePrefix$id" }
-    }
-
     /** Dissolve every group of this content type (the Settings "Clear all merges" action). */
     suspend fun clearAllMergesIncludingAuto() {
         repository.getAllMemberships(contentType)

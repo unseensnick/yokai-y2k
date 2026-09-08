@@ -810,15 +810,6 @@ class NovelDetailsViewModel(
 
     fun removeAllSourcesFromLibrary() = mergeActions.removeAllSourcesFromLibrary()
 
-    /**
-     * Renumber sourceOrder over the list the aggregation stitched, so a "by source order" sort does
-     * not interleave sources. The list arrives in reading order and keeps it: sorting by chapter
-     * number here was the interleave, because a number is whatever its own source counted and two
-     * sources of one novel routinely disagree. Copies; each source's own order is untouched.
-     */
-    private fun restampReadingOrder(chapters: List<NovelChapter>): List<NovelChapter> =
-        chapters.mapIndexed { index, chapter -> chapter.copy(sourceOrder = index.toLong()) }
-
     /** Stale-then-fresh: the cached list stays under a spinner while the sync runs, then the flow
      *  swaps in fresh rows. Read/bookmark are preserved by the sync. Deduped against concurrent runs.
      *
