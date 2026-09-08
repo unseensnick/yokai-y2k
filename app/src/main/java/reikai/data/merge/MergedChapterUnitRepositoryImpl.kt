@@ -54,7 +54,7 @@ class MergedChapterUnitRepositoryImpl(
             else -> queries.unreadCountsByGroup { groupId, unread -> groupId to unread }
         }.subscribeToList().map { it.toMap() }
 
-    override suspend fun getDownloadUnits(contentType: ContentType): Map<Long, List<DownloadUnitRow>> =
+    override fun getDownloadUnitsAsFlow(contentType: ContentType): Flow<Map<Long, List<DownloadUnitRow>>> =
         when (contentType) {
             ContentType.NOVELS -> queries.downloadUnitsByGroupNovel { groupId, unit, ownerId, name, url ->
                 DownloadUnitRow(groupId, unit!!.toInt(), ownerId, name, scanlator = null, chapterUrl = url)
@@ -62,7 +62,7 @@ class MergedChapterUnitRepositoryImpl(
             else -> queries.downloadUnitsByGroup { groupId, unit, ownerId, name, scanlator, url ->
                 DownloadUnitRow(groupId, unit!!.toInt(), ownerId, name, scanlator, url)
             }
-        }.awaitAsList().groupBy { it.groupId }
+        }.subscribeToList().map { rows -> rows.groupBy { it.groupId } }
 
     override suspend fun getCoveredChapterCounts(): Map<Long, Long> =
         queries.coveredChapterCountsByManga().awaitAsList().associate { it.mangaId to it.coveredCount }

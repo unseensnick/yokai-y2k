@@ -41,8 +41,11 @@ interface MergedChapterUnitRepository {
      * Every merged group's member chapters, keyed by group, with what a download probe needs to find
      * the file. Whether one is on disk lives on disk, not here, so the count is the caller's to take:
      * it probes these rows and counts the merged chapters that answer.
+     *
+     * A flow, not a read: the rows change only when the chapters behind a group do, while the library
+     * re-emits on far more than that, including once per finished download.
      */
-    suspend fun getDownloadUnits(contentType: ContentType): Map<Long, List<DownloadUnitRow>>
+    fun getDownloadUnitsAsFlow(contentType: ContentType): Flow<Map<Long, List<DownloadUnitRow>>>
 
     /**
      * How many of its group's chapters each merged manga covers, keyed by manga id: the count the

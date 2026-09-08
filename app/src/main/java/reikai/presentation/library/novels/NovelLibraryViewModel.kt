@@ -37,6 +37,7 @@ import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.library.librarySortComparator
 import reikai.domain.library.sortForCategory
 import reikai.domain.library.toSortMode
+import reikai.domain.merge.DownloadUnitRow
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
@@ -257,7 +258,8 @@ class NovelLibraryViewModel(
             // Folded in rather than read while collapsing: reconciliation writes the stitch while the
             // library is already on screen, and nothing else makes this flow re-emit when it lands.
             mergedChapterUnitRepository.getUnreadCountsAsFlow(ContentType.NOVELS),
-        ) { merge, unread -> merge.copy(mergedUnread = unread) }
+            mergedChapterUnitRepository.getDownloadUnitsAsFlow(ContentType.NOVELS),
+        ) { merge, unread, units -> merge.copy(mergedUnread = unread, downloadUnits = units) }
         // No group-by input: grouping is LibraryEngine's, and re-running this whole pipeline on a
         // group-mode change would rebuild the filtered list for a decision it no longer makes.
         return combine(
@@ -302,15 +304,18 @@ class NovelLibraryViewModel(
 
     /**
      * Merged chapters with a copy on disk, per group. Members that have downloaded nothing are never
-     * probed, so a library whose merged novels hold no downloads pays one indexed query. Twin of the
+     * probed, so a library whose merged novels hold no downloads pays nothing here at all. Twin of the
      * manga library's, over the same kernel.
      */
-    private suspend fun mergedDownloadCounts(library: List<LibraryNovel>): Map<Long, Int> {
+    private fun mergedDownloadCounts(
+        library: List<LibraryNovel>,
+        rowsByGroup: Map<Long, List<DownloadUnitRow>>,
+    ): Map<Long, Int> {
         val withDownloads = library.filter { it.downloadCount > 0 }
         if (withDownloads.isEmpty()) return emptyMap()
         val novelById = withDownloads.associate { it.novel.id to it.novel }
         return downloadedUnitsByGroup(
-            rowsByGroup = mergedChapterUnitRepository.getDownloadUnits(ContentType.NOVELS),
+            rowsByGroup = rowsByGroup,
             ownersWithDownloads = novelById.keys,
         ) { row ->
             val owner = novelById.getValue(row.ownerId)
@@ -350,7 +355,11 @@ class NovelLibraryViewModel(
         val mergedUnread = if (settings.merge.mergingEnabled) settings.merge.mergedUnread else emptyMap()
         // Downloads take the same treatment, which summing the members double-counted for every chapter
         // two of them hold. Absent means the group holds none; an empty map means nothing probed it.
-        val mergedDownloads = if (settings.merge.mergingEnabled) mergedDownloadCounts(withCounts) else emptyMap()
+        val mergedDownloads = if (settings.merge.mergingEnabled) {
+            mergedDownloadCounts(withCounts, settings.merge.downloadUnits)
+        } else {
+            emptyMap()
+        }
         val groups = collapsedAll.map { group ->
             val groupId = settings.merge.membership[group.representative.novel.id]
                 ?.takeIf { group.memberIds.size > 1 }
@@ -694,6 +703,9 @@ class NovelLibraryViewModel(
         /** Per group, one unit per chapter it covers that no source has read. A group absent from the
          *  map has not been stitched yet, which is not the same as having nothing left to read. */
         val mergedUnread: Map<Long, Long> = emptyMap(),
+        /** Per group, its member chapters, for the download badge to probe. Rides the flow rather than
+         *  being read per emission: it changes only when a group's chapters do. */
+        val downloadUnits: Map<Long, List<DownloadUnitRow>> = emptyMap(),
     )
 
     /** Carries the per-session filters plus the global Downloaded-only mode out of the filter sub-flow. */

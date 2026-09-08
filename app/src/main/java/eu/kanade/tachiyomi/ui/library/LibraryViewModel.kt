@@ -57,6 +57,7 @@ import reikai.domain.library.toSortMode
 import reikai.domain.manga.MangaMergeManager
 import reikai.domain.manga.MergedChapterProvider
 import reikai.domain.manga.downloadedChapterIds
+import reikai.domain.merge.DownloadUnitRow
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
@@ -519,7 +520,7 @@ class LibraryViewModel(
                 // RK: the same treatment for downloads, which summing the members double-counted for
                 //     every chapter two of them hold.
                 mergedDownloadsByGroup = if (mergePrefs.mergingEnabled) {
-                    mergedDownloadCounts(items)
+                    mergedDownloadCounts(items, mergePrefs.downloadUnits)
                 } else {
                     emptyMap()
                 },
@@ -549,6 +550,9 @@ class LibraryViewModel(
         /** Per group, one unit per chapter it covers that no source has read. A group absent from the
          *  map has not been stitched yet, which is not the same as having nothing left to read. */
         val mergedUnread: Map<Long, Long> = emptyMap(),
+        /** Per group, its member chapters, for the download badge to probe. Rides the flow rather than
+         *  being read per emission: it changes only when a group's chapters do. */
+        val downloadUnits: Map<Long, List<DownloadUnitRow>> = emptyMap(),
     )
 
     private fun mergePrefsFlow(): Flow<MergePrefs> = combine(
@@ -564,18 +568,22 @@ class LibraryViewModel(
         // Folded in rather than read in the transform: reconciliation writes the stitch while the
         // library is already on screen, and nothing else makes this flow re-emit when it lands.
         mergedChapterUnitRepository.getUnreadCountsAsFlow(ContentType.MANGA),
-    ) { prefs, unread -> prefs.copy(mergedUnread = unread) }
+        mergedChapterUnitRepository.getDownloadUnitsAsFlow(ContentType.MANGA),
+    ) { prefs, unread, units -> prefs.copy(mergedUnread = unread, downloadUnits = units) }
 
     /**
      * RK: merged chapters with a copy on disk, per group. Members that have downloaded nothing are
-     * never probed, so a library whose merged entries hold no downloads pays one indexed query.
+     * never probed, so a library whose merged entries hold no downloads pays nothing here at all.
      */
-    private suspend fun mergedDownloadCounts(items: List<LibraryItem>): Map<Long, Int> {
+    private fun mergedDownloadCounts(
+        items: List<LibraryItem>,
+        rowsByGroup: Map<Long, List<DownloadUnitRow>>,
+    ): Map<Long, Int> {
         val withDownloads = items.filter { it.downloadCount > 0 }
         if (withDownloads.isEmpty()) return emptyMap()
         val mangaById = withDownloads.associate { it.libraryManga.manga.id to it.libraryManga.manga }
         return downloadedUnitsByGroup(
-            rowsByGroup = mergedChapterUnitRepository.getDownloadUnits(ContentType.MANGA),
+            rowsByGroup = rowsByGroup,
             ownersWithDownloads = mangaById.keys,
         ) { row ->
             val owner = mangaById.getValue(row.ownerId)
