@@ -21,8 +21,10 @@ import reikai.domain.category.recentsCategoryFilterFlow
 import reikai.domain.entry.EntryId
 import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.expandToUnits
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
+import reikai.domain.novel.NovelMergedChapterProvider
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.interactor.GetNextNovelChapter
@@ -48,6 +50,7 @@ import reikai.presentation.reader.NovelReaderTarget
 import reikai.presentation.reader.novelReaderTarget
 import reikai.presentation.updates.NovelUpdatesItem
 import reikai.presentation.updates.NovelUpdatesViewModel
+import tachiyomi.core.common.util.lang.withIOContext
 import kotlin.time.Clock
 
 /**
@@ -70,6 +73,7 @@ class NovelRecentsAdapter(
     private val novelRepository: NovelRepository,
     private val reikaiLibraryPreferences: ReikaiLibraryPreferences,
     private val mergeManager: NovelMergeManager,
+    private val mergedChapterProvider: NovelMergedChapterProvider,
     private val novelLibraryAdder: NovelLibraryAdder,
     // Providers, so building the adapter still does not build the download manager: constructing it
     // restores the persisted queue and can start the download worker. Both are only read when a row
@@ -195,7 +199,8 @@ class NovelRecentsAdapter(
             // Same fallback as the manga twin: the cross-source stitch can drop this novel's own
             // chapters, and without it a merged row on this lane resolves nothing and the tap dies.
             RecentsLane.Added -> firstUnreadOf(group.chapters.map { it.toRecentsChapter(group.readInOtherSources) })
-                ?: getNextNovelChapter.awaitFirstUnread(novelId)?.also { chapters[it.id] = it }?.id
+                ?: getNextNovelChapter.awaitFirstUnread(novelId, group.readInOtherSources)
+                    ?.also { chapters[it.id] = it }?.id
         } ?: return null
         return TargetResolution(chapterId, chapters)
     }
@@ -211,29 +216,40 @@ class NovelRecentsAdapter(
     /** Present only where the updates model is, the twin of [MangaRecentsAdapter.chapterActions]. */
     override val chapterActions: RecentsChapterActions? = updatesModel?.let(::ModelChapterActions)
 
-    private class ModelChapterActions(private val model: NovelUpdatesViewModel) : RecentsChapterActions {
+    private inner class ModelChapterActions(private val model: NovelUpdatesViewModel) : RecentsChapterActions {
 
         // Keyed by chapter id rather than resolved against the rendered updates feed, which holds no
         // read-lane row. Mirrors the manga adapter.
         private fun Set<ChapterRef>.ownIds(): List<Long> =
             filter { it.entryId is EntryId.Novel }.map { it.chapterId }
 
-        override fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
-            model.markRead(chapters.ownIds(), read)
+        // The group's copies of the same merged chapters, off the stored stitch. Twin of the manga
+        // adapter's, pinned by the one stitch both read.
+        private suspend fun Set<ChapterRef>.groupIds(): List<Long> = withIOContext {
+            filter { it.entryId is EntryId.Novel }
+                .groupBy { it.entryId.rawId }
+                .flatMap { (novelId, refs) ->
+                    expandToUnits(refs.mapTo(HashSet()) { it.chapterId }, mergedChapterProvider.stitchOf(novelId))
+                }
+                .distinct()
         }
 
-        override fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
-            model.bookmark(chapters.ownIds(), bookmarked)
+        override suspend fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
+            model.markRead(chapters.groupIds(), read)
+        }
+
+        override suspend fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
+            model.bookmark(chapters.groupIds(), bookmarked)
         }
 
         // Per row rather than in one call: this model's batch entry point only ever queues, and the
         // row indicator also cancels, expedites and deletes.
-        override fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
+        override suspend fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
             chapters.ownIds().forEach { model.onDownloadAction(it, action) }
         }
 
-        override fun deleteDownloads(chapters: Set<ChapterRef>) {
-            model.deleteChapters(chapters.ownIds())
+        override suspend fun deleteDownloads(chapters: Set<ChapterRef>) {
+            model.deleteChapters(chapters.groupIds())
         }
     }
 

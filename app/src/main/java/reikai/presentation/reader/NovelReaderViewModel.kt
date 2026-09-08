@@ -33,7 +33,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import logcat.LogPriority
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
@@ -400,6 +402,11 @@ class NovelReaderViewModel(
     @Volatile
     private var forwardEligibleIds: Set<Long> = emptySet()
 
+    /** Chapters unread on their own row but read on another source of the merge group, resolved with
+     *  the reading order. "Skip read" means the group's read state, as every other surface reads it. */
+    @Volatile
+    private var readInOtherSources: Set<Long> = emptySet()
+
     private val neighbours = MutableStateFlow(Neighbours())
 
     /** What the navigator's chapter buttons enable on. */
@@ -746,12 +753,18 @@ class NovelReaderViewModel(
      * (placed by chapter number) rather than leaving prev and next with nowhere to step from.
      */
     private suspend fun resolveReadingOrder() {
+        // Both scopes need the group behind the opened novel: source scope shows one source's rows, but
+        // whether the story has been read is not a property of the row, so the flags are resolved here
+        // once and the two members are loaded once.
+        val ids = mergeManager.relatedIdsList(novelId)
+        val pooled = if (ids.size <= 1) emptyList() else ids.flatMap { chapterRepo.getByNovelId(it) }
+        val stitch = if (pooled.isEmpty()) emptyList() else mergedChapterProvider.stitchOf(novelId)
         // The chapters stay chapters through both filters. Reducing to ids here meant re-reading every
         // one of them back out of the database a row at a time, before the first page could be drawn.
         val resolved = if (sourceScoped) {
             dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder()))
         } else {
-            val chapters = resolveGroupChapters()
+            val chapters = resolveGroupChapters(ids, pooled, stitch)
             if (chapters.any { it.id == currentChapterId }) {
                 chapters
             } else {
@@ -761,6 +774,7 @@ class NovelReaderViewModel(
         }
         val visible = filterHiddenChapters(resolved)
         orderedIds = visible.map { it.id }
+        readInOtherSources = flaggedOnAnotherSource(pooled, visible, stitch, { it.id }, { it.read })
         forwardEligibleIds = resolveForwardEligible(visible)
     }
 
@@ -773,12 +787,13 @@ class NovelReaderViewModel(
 
     /** The merge group's unified chapters, the novel twin of `MergedChapterProvider`. A non-merged novel
      *  is just its own. The global preferred-source ranking picks the trunk, as details and library do. */
-    private suspend fun resolveGroupChapters(): List<NovelChapter> {
-        val ids = mergeManager.relatedIdsList(novelId)
+    private suspend fun resolveGroupChapters(
+        ids: List<Long>,
+        pooled: List<NovelChapter>,
+        stitch: List<ChapterUnit>,
+    ): List<NovelChapter> {
         if (ids.size <= 1) return chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())
-        val pooled = ids.flatMap { chapterRepo.getByNovelId(it) }
         val sourceIdByNovel = ids.associateWith { novelRepo.getById(it)?.source.orEmpty() }
-        val stitch = mergedChapterProvider.stitchOf(novelId)
         val merged = mergedChapterProvider.merged(pooled, stitch).sortedWith(readingOrder())
         return dedupIfEnabled(merged, sourceIdByNovel)
     }
@@ -832,12 +847,13 @@ class NovelReaderViewModel(
         val bookmarkFilter = novel.effectiveBookmarkedFilter(novelPreferences)
         val downloadFilter = novel.effectiveDownloadedFilter(novelPreferences)
         return chapters.filterTo(HashSet()) { ch ->
+            val isRead = ch.read || ch.id in readInOtherSources
             when {
                 ch.id == currentChapterId -> true
-                skipRead && ch.read -> false
+                skipRead && isRead -> false
                 !skipFiltered -> true
-                readFilter == NovelChapterFlags.SHOW_UNREAD && ch.read -> false
-                readFilter == NovelChapterFlags.SHOW_READ && !ch.read -> false
+                readFilter == NovelChapterFlags.SHOW_UNREAD && isRead -> false
+                readFilter == NovelChapterFlags.SHOW_READ && !isRead -> false
                 bookmarkFilter == NovelChapterFlags.SHOW_BOOKMARKED && !ch.bookmark -> false
                 bookmarkFilter == NovelChapterFlags.SHOW_NOT_BOOKMARKED && ch.bookmark -> false
                 downloadFilter == NovelChapterFlags.SHOW_DOWNLOADED && ch.id !in downloaded -> false

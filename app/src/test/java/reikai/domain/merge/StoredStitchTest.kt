@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
  */
 class StoredStitchTest {
 
-    private data class Row(val id: Long, val read: Boolean = false)
+    private data class Row(val id: Long, val read: Boolean = false, val bookmark: Boolean = false)
 
     /** Two sources' copies of two merged chapters, the first source ranked ahead of the second. */
     private val stitch = listOf(
@@ -61,7 +61,7 @@ class StoredStitchTest {
     fun readOnSiblingCountsAsRead() {
         val rows = listOf(Row(10), Row(20, read = true), Row(11))
 
-        readOnAnotherSource(rows, render(*rows.toTypedArray()), stitch, { it.id }, { it.read }) shouldBe setOf(10L)
+        flaggedOnAnotherSource(rows, render(*rows.toTypedArray()), stitch, { it.id }, { it.read }) shouldBe setOf(10L)
     }
 
     @Test
@@ -69,7 +69,29 @@ class StoredStitchTest {
     fun unreadEverywhereIsNotReported() {
         val rows = listOf(Row(10), Row(20), Row(11))
 
-        readOnAnotherSource(rows, render(*rows.toTypedArray()), stitch, { it.id }, { it.read }).isEmpty() shouldBe true
+        flaggedOnAnotherSource(rows, render(*rows.toTypedArray()), stitch, { it.id }, { it.read }).isEmpty() shouldBe
+            true
+    }
+
+    @Test
+    @DisplayName("a chapter flagged on its own row is not reported as flagged elsewhere")
+    fun ownFlagIsNotElsewhere() {
+        // The set names rows whose own copy says no, so a caller can OR it with the row's own value
+        // without double counting, and a toggle reads the same answer either way.
+        val rows = listOf(Row(10, read = true), Row(20, read = true), Row(11))
+
+        flaggedOnAnotherSource(rows, render(*rows.toTypedArray()), stitch, { it.id }, { it.read })
+            .isEmpty() shouldBe true
+    }
+
+    @Test
+    @DisplayName("the same rule answers for a flag other than read")
+    fun anyFlagCarriesAcrossSources() {
+        // Bookmark and downloaded run through this too, so the three cannot become three rules.
+        val rows = listOf(Row(10), Row(20, bookmark = true), Row(11))
+
+        flaggedOnAnotherSource(rows, render(*rows.toTypedArray()), stitch, { it.id }, { it.bookmark }) shouldBe
+            setOf(10L)
     }
 
     @Test
@@ -77,7 +99,7 @@ class StoredStitchTest {
     fun ungroupedReportsNothing() {
         val rows = listOf(Row(10, read = true), Row(11))
 
-        readOnAnotherSource(rows, rows, emptyList(), { it.id }, { it.read }).isEmpty() shouldBe true
+        flaggedOnAnotherSource(rows, rows, emptyList(), { it.id }, { it.read }).isEmpty() shouldBe true
     }
 
     @Test

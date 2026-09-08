@@ -2,6 +2,7 @@ package reikai.domain.novel
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.model.NovelChapter
 
 class NovelChapterAggregationTest {
@@ -80,7 +81,13 @@ class NovelChapterAggregationTest {
         unified.numbers() shouldBe listOf(1.0, 2.0, 3.0)
     }
 
-    // Cross-source read carry-over, the twin of MergedChapterProviderTest's manga cases.
+    // Cross-source read carry-over, the twin of MergedChapterProviderTest's manga cases. Run over the
+    // shared kernel, against the units this stitch produced, which is what every surface reads.
+
+    private fun readInOtherSources(byNovel: Map<Long, List<NovelChapter>>): Set<Long> {
+        val merged = NovelChapterAggregation.merge(byNovel)
+        return flaggedOnAnotherSource(byNovel.values.flatten(), merged.chapters, merged.units, { it.id }, { it.read })
+    }
 
     @Test
     fun `a chapter read on another source is reported as read for the group`() {
@@ -88,10 +95,7 @@ class NovelChapterAggregationTest {
         val other = listOf(chapter(2L, 1.0, "Terminal", read = true))
         val byNovel = mapOf(1L to trunk, 2L to other)
 
-        val result = NovelChapterAggregation.readInOtherSources(
-            byNovel,
-            NovelChapterAggregation.aggregate(byNovel),
-        )
+        val result = readInOtherSources(byNovel)
 
         result shouldBe setOf(trunk.single().id)
     }
@@ -100,10 +104,7 @@ class NovelChapterAggregationTest {
     fun `a chapter nobody has read is not reported`() {
         val byNovel = mapOf(1L to listOf(chapter(1L, 1.0, "Terminal")), 2L to listOf(chapter(2L, 1.0, "Terminal")))
 
-        val result = NovelChapterAggregation.readInOtherSources(
-            byNovel,
-            NovelChapterAggregation.aggregate(byNovel),
-        )
+        val result = readInOtherSources(byNovel)
 
         result shouldBe emptySet()
     }
@@ -119,10 +120,7 @@ class NovelChapterAggregationTest {
             ),
         )
 
-        val result = NovelChapterAggregation.readInOtherSources(
-            byNovel,
-            NovelChapterAggregation.aggregate(byNovel),
-        )
+        val result = readInOtherSources(byNovel)
 
         result shouldBe emptySet()
     }
@@ -133,10 +131,7 @@ class NovelChapterAggregationTest {
         val other = listOf(chapter(2L, 2.0, "New Arc", read = true))
         val byNovel = mapOf(1L to trunk, 2L to other)
 
-        val result = NovelChapterAggregation.readInOtherSources(
-            byNovel,
-            NovelChapterAggregation.aggregate(byNovel),
-        )
+        val result = readInOtherSources(byNovel)
 
         result shouldBe emptySet()
     }

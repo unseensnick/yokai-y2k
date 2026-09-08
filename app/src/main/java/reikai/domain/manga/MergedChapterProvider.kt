@@ -8,7 +8,7 @@ import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
-import reikai.domain.merge.readOnAnotherSource
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.merge.renderStoredStitch
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
@@ -44,6 +44,9 @@ class MergedChapterProvider(
         /** The stored stitch behind [chapters], so a reader acting on a row can reach the group's
          *  other copies of it without matching numbers the sources disagree on. */
         val stitch: List<ChapterUnit> = emptyList(),
+        /** Every member's chapters, which is where the copies [chapters] stands in for live. A caller
+         *  asking a cross-source question (bookmarked anywhere, on disk anywhere) needs them. */
+        val pooledChapters: List<Chapter> = chapters,
     ) {
         val isMerged: Boolean get() = mangaById.size > 1
     }
@@ -67,8 +70,9 @@ class MergedChapterProvider(
             mangaById = mangaById,
             chapters = merged,
             sourceNameByMangaId = sourceNameByMangaId,
-            readInOtherSources = readOnAnotherSource(pooled, merged, stitch, { it.id }, { it.read }),
+            readInOtherSources = flaggedOnAnotherSource(pooled, merged, stitch, { it.id }, { it.read }),
             stitch = stitch,
+            pooledChapters = pooled,
         )
     }
 

@@ -101,24 +101,30 @@ fun readingOrderComparator(novel: Novel, prefs: NovelPreferences): Comparator<No
 /**
  * Sort + filter a chapter list for display, using the novel's effective settings. [downloadedChapterIds]
  * carries the disk-download membership (from NovelDownloadCache) so the downloaded filter has no DB flag.
+ * The two "in other sources" sets carry a merge group's cross-source state, so a filter agrees with what
+ * the rows show rather than with the copy the stitch happened to keep.
  */
 fun List<NovelChapter>.sortedAndFiltered(
     novel: Novel,
     prefs: NovelPreferences,
     downloadedChapterIds: Set<Long>,
+    readInOtherSources: Set<Long>,
+    bookmarkedInOtherSources: Set<Long>,
 ): List<NovelChapter> {
     val read = novel.effectiveReadFilter(prefs)
     val bookmarked = novel.effectiveBookmarkedFilter(prefs)
     val downloaded = novel.effectiveDownloadedFilter(prefs)
     val filtered = filter { ch ->
+        val isRead = ch.read || ch.id in readInOtherSources
+        val isBookmarked = ch.bookmark || ch.id in bookmarkedInOtherSources
         val readOk = when (read) {
-            NovelChapterFlags.SHOW_UNREAD -> !ch.read
-            NovelChapterFlags.SHOW_READ -> ch.read
+            NovelChapterFlags.SHOW_UNREAD -> !isRead
+            NovelChapterFlags.SHOW_READ -> isRead
             else -> true
         }
         val bookmarkOk = when (bookmarked) {
-            NovelChapterFlags.SHOW_BOOKMARKED -> ch.bookmark
-            NovelChapterFlags.SHOW_NOT_BOOKMARKED -> !ch.bookmark
+            NovelChapterFlags.SHOW_BOOKMARKED -> isBookmarked
+            NovelChapterFlags.SHOW_NOT_BOOKMARKED -> !isBookmarked
             else -> true
         }
         val downloadOk = when (downloaded) {

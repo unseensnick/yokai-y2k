@@ -9,8 +9,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import reikai.domain.library.ContentType
 import reikai.domain.manga.ChapterAggregation
-import reikai.domain.merge.ChapterMatchKeys
-import reikai.domain.merge.crossSourceReadIds
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.merge.storedUnitsOf
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.model.NovelChapter
@@ -193,22 +192,20 @@ class MergedCountConformanceTest {
 
     private fun novelListCount(rows: List<Row>): Int {
         val byNovel = rows.groupBy({ it.owner }, { it.toNovelChapter() })
-        val unified = NovelChapterAggregation.aggregate(byNovel)
-        val readElsewhere = NovelChapterAggregation.readInOtherSources(byNovel, unified)
-        return unified.count { !it.read && it.id !in readElsewhere }
+        val merged = NovelChapterAggregation.merge(byNovel)
+        val pooled = byNovel.values.flatten()
+        val readElsewhere =
+            flaggedOnAnotherSource(pooled, merged.chapters, merged.units, { it.id }, { it.read })
+        return merged.chapters.count { !it.read && it.id !in readElsewhere }
     }
 
     private fun mangaListCount(rows: List<Row>): Int {
         val bySource = rows.groupBy({ it.owner }, { it.toChapter() })
-        val unified = ChapterAggregation.aggregate(bySource)
-        val readElsewhere = crossSourceReadIds(
-            bySource = bySource,
-            unified = unified,
-            id = { it.id },
-            read = { it.read },
-            key = { ChapterMatchKeys.manga(it.chapterNumber, isGallerySource = false) },
-        )
-        return unified.count { !it.read && it.id !in readElsewhere }
+        val merged = ChapterAggregation.merge(bySource)
+        val pooled = bySource.values.flatten()
+        val readElsewhere =
+            flaggedOnAnotherSource(pooled, merged.chapters, merged.units, { it.id }, { it.read })
+        return merged.chapters.count { !it.read && it.id !in readElsewhere }
     }
 
     // The badge's answer: the same stitch, stored the way reconciliation stores it, then counted.

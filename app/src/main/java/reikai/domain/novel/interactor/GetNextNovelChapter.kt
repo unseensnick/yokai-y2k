@@ -1,7 +1,8 @@
 package reikai.domain.novel.interactor
 
 import dev.zacsweers.metro.Inject
-import reikai.domain.merge.readOnAnotherSource
+import reikai.domain.merge.ChapterUnit
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelMergedChapterProvider
@@ -11,6 +12,10 @@ import reikai.domain.novel.model.NovelChapter
 data class NovelGroupChapters(
     val chapters: List<NovelChapter>,
     val readInOtherSources: Set<Long> = emptySet(),
+    /** The stored stitch behind [chapters], and every member's chapters, so a caller can ask a
+     *  cross-source question (bookmarked anywhere, on disk anywhere) about the copies it stands in for. */
+    val stitch: List<ChapterUnit> = emptyList(),
+    val pooled: List<NovelChapter> = chapters,
 )
 
 /**
@@ -29,8 +34,8 @@ class GetNextNovelChapter(
      * surface's newly-added lane). Twin of `GetNextChapters.await(mangaId, onlyUnread = true)`, which
      * the manga side already had; without it the lane could only resolve a target for manga.
      */
-    suspend fun awaitFirstUnread(novelId: Long): NovelChapter? =
-        chapterRepository.getByNovelId(novelId).firstOrNull { !it.read }
+    suspend fun awaitFirstUnread(novelId: Long, readInOtherSources: Set<Long>): NovelChapter? =
+        chapterRepository.getByNovelId(novelId).firstOrNull { !it.read && it.id !in readInOtherSources }
 
     /**
      * The group's chapters as one cross-source list, the same one the details "All" view shows, plus
@@ -46,7 +51,12 @@ class GetNextNovelChapter(
         // whatever its own source counted, so two sources of one novel disagree.
         val stitch = mergedChapterProvider.stitchOf(novelId)
         val unified = mergedChapterProvider.merged(pooled, stitch)
-        return NovelGroupChapters(unified, readOnAnotherSource(pooled, unified, stitch, { it.id }, { it.read }))
+        return NovelGroupChapters(
+            chapters = unified,
+            readInOtherSources = flaggedOnAnotherSource(pooled, unified, stitch, { it.id }, { it.read }),
+            stitch = stitch,
+            pooled = pooled,
+        )
     }
 
     /** The group's first unread chapter, skipping what another of its sources has already read. */

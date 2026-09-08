@@ -12,19 +12,29 @@ import reikai.presentation.browse.AddFavoriteResult
  * no-op the capability rule exists to prevent.
  */
 interface RecentsChapterActions {
-    /** Marks read or unread, routed through this type's read interactor so delete-after-read fires. */
-    fun markRead(chapters: Set<ChapterRef>, read: Boolean)
+    /**
+     * Marks read or unread, routed through this type's read interactor so delete-after-read fires.
+     * Reaches every source of a merge group, as the details list does: a collapsed row stands for the
+     * whole group, so marking it read on one source alone would leave the group part-read. Suspend
+     * because reaching them means reading the group's stored stitch.
+     */
+    suspend fun markRead(chapters: Set<ChapterRef>, read: Boolean)
 
-    fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean)
+    /** Bookmarks, group-wide on the same rule as [markRead]. */
+    suspend fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean)
 
     /**
      * Queues, expedites, cancels or deletes, per the action the row's own indicator raised. One verb
      * with the action rather than one per action: the indicator already speaks in these four cases,
      * and a bulk download is the same call with [ChapterDownloadAction.START].
+     *
+     * Acts on the named chapters alone, never the group's copies: the grouped sources carry the same
+     * chapter, so downloading each copy would fetch it once per source.
      */
-    fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction)
+    suspend fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction)
 
-    fun deleteDownloads(chapters: Set<ChapterRef>)
+    /** Deletes the group's copies, since a row reads as downloaded when any of them holds the file. */
+    suspend fun deleteDownloads(chapters: Set<ChapterRef>)
 }
 
 /**

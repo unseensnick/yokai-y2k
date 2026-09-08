@@ -20,26 +20,27 @@ fun <T> renderStoredStitch(chapters: List<T>, stitch: List<ChapterUnit>, id: (T)
 }
 
 /**
- * Chapters of [shown] that are unread on their own row but already read on another source of the
- * group. A merged chapter appears once, so without this it reads as unread purely because the copy the
- * stitch ranked first happens to be the unread one. [chapters] is every member's chapters, which is
- * where the other copies live.
+ * Chapters of [shown] whose own row does not carry [flag] but whose copy on another source of the
+ * group does. A merged chapter appears once, so without this it reads as unflagged purely because the
+ * copy the stitch ranked first happens to be the one without it. [chapters] is every member's
+ * chapters, which is where the other copies live. Read, bookmark and downloaded all resolve here, so
+ * the three cannot drift into three rules.
  */
-fun <T> readOnAnotherSource(
+fun <T> flaggedOnAnotherSource(
     chapters: List<T>,
     shown: List<T>,
     stitch: List<ChapterUnit>,
     id: (T) -> Long,
-    read: (T) -> Boolean,
+    flag: (T) -> Boolean,
 ): Set<Long> {
     if (stitch.isEmpty()) return emptySet()
-    val readIds = chapters.asSequence().filter(read).mapTo(HashSet(), id)
-    if (readIds.isEmpty()) return emptySet()
-    val readUnits = stitch.asSequence().filter { it.chapterId in readIds }.mapTo(HashSet()) { it.unit }
-    if (readUnits.isEmpty()) return emptySet()
+    val flaggedIds = chapters.asSequence().filter(flag).mapTo(HashSet(), id)
+    if (flaggedIds.isEmpty()) return emptySet()
+    val flaggedUnits = stitch.asSequence().filter { it.chapterId in flaggedIds }.mapTo(HashSet()) { it.unit }
+    if (flaggedUnits.isEmpty()) return emptySet()
     val unitByChapterId = stitch.associate { it.chapterId to it.unit }
     return shown.asSequence()
-        .filter { !read(it) && unitByChapterId[id(it)] in readUnits }
+        .filter { !flag(it) && unitByChapterId[id(it)] in flaggedUnits }
         .mapTo(HashSet(), id)
 }
 

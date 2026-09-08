@@ -1387,17 +1387,17 @@ private class FakeRecentsProvider(
     override val chapterActions: RecentsChapterActions? =
         if (actsOnChapters) {
             object : RecentsChapterActions {
-                override fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
+                override suspend fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
                     markedRead = chapters
                 }
 
-                override fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) = Unit
+                override suspend fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) = Unit
 
-                override fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
+                override suspend fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
                     downloaded = chapters to action
                 }
 
-                override fun deleteDownloads(chapters: Set<ChapterRef>) = Unit
+                override suspend fun deleteDownloads(chapters: Set<ChapterRef>) = Unit
             }
         } else {
             null

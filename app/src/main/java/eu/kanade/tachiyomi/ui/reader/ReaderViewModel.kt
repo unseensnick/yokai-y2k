@@ -318,16 +318,20 @@ class ReaderViewModel(
         val chaptersForReader = when {
             applyReadFilter &&
                 (readerPreferences.skipRead.get() || readerPreferences.skipFiltered.get()) -> {
+                // RK: read on any of the group's sources, the same rule the details list and the
+                // library badge apply, so "skip read" skips what the user is shown as read.
+                val readElsewhere = mergedGroup?.readInOtherSources.orEmpty()
                 val filteredChapters = chapters.filterNot {
                     // RK: the filter PREFS stay the opened manga's (the user's current context), but
                     // the downloaded check resolves to each chapter's OWN source so a merged chapter
                     // is probed in the right download folder.
                     val chapterManga = mangaForChapterId(it.mangaId)
+                    val isRead = it.read || it.id in readElsewhere
                     when {
-                        readerPreferences.skipRead.get() && it.read -> true
+                        readerPreferences.skipRead.get() && isRead -> true
                         readerPreferences.skipFiltered.get() -> {
-                            (manga.unreadFilterRaw == Manga.CHAPTER_SHOW_READ && !it.read) ||
-                                (manga.unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD && it.read) ||
+                            (manga.unreadFilterRaw == Manga.CHAPTER_SHOW_READ && !isRead) ||
+                                (manga.unreadFilterRaw == Manga.CHAPTER_SHOW_UNREAD && isRead) ||
                                 (
                                     manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_DOWNLOADED &&
                                         !downloadManager.isChapterDownloaded(
@@ -393,7 +397,7 @@ class ReaderViewModel(
             }
             .run {
                 if (basePreferences.downloadedOnly.get()) {
-                    filterDownloaded(manga, downloadCache)
+                    filterDownloaded(downloadCache) { mangaForChapterId(it.mangaId) }
                 } else {
                     this
                 }
@@ -694,23 +698,36 @@ class ReaderViewModel(
             )
             if (!isNextChapterDownloaded) return@launchIO
 
-            val chaptersToDownload = getNextChapters.await(nextChapterManga.id, nextChapter.id!!).run {
-                if (readerPreferences.skipDupe.get()) {
-                    removeDuplicateChapters(
-                        nextChapter.toDomainChapter()!!,
-                        numberOf = { it.chapterNumber },
-                        idOf = { it.id },
-                        originOf = { it.scanlator },
-                    )
-                } else {
-                    this
-                }
-            }.take(downloadAheadAmount)
+            // RK: on a merged series the chapters ahead belong to whichever sources carry them, so the
+            // target is the reader's own cross-source list rather than the next chapter's source alone.
+            // It is already deduplicated by the stitch, which is why the skip-duplicates pass below is
+            // the unmerged path's only.
+            val chaptersToDownload = if (mergedGroup?.isMerged == true) {
+                val readElsewhere = mergedGroup?.readInOtherSources.orEmpty()
+                fullChapterList.asSequence()
+                    .dropWhile { it.chapter.id != nextChapter.id }
+                    .mapNotNull { it.chapter.toDomainChapter() }
+                    .filterNot { it.read || it.id in readElsewhere }
+                    .take(downloadAheadAmount)
+                    .toList()
+            } else {
+                getNextChapters.await(nextChapterManga.id, nextChapter.id!!).run {
+                    if (readerPreferences.skipDupe.get()) {
+                        removeDuplicateChapters(
+                            nextChapter.toDomainChapter()!!,
+                            numberOf = { it.chapterNumber },
+                            idOf = { it.id },
+                            originOf = { it.scanlator },
+                        )
+                    } else {
+                        this
+                    }
+                }.take(downloadAheadAmount)
+            }
 
-            downloadManager.downloadChapters(
-                nextChapterManga,
-                chaptersToDownload,
-            )
+            chaptersToDownload.groupBy { it.mangaId }.forEach { (ownerId, owned) ->
+                downloadManager.downloadChapters(mangaForChapterId(ownerId), owned)
+            }
         }
     }
 

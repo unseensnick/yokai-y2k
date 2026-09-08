@@ -59,6 +59,7 @@ import reikai.domain.manga.MergedChapterProvider
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.presentation.library.LibraryFilterPrefs
 import reikai.presentation.library.LibraryGroup
 import reikai.presentation.library.MangaMergeCollapse
@@ -80,7 +81,6 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.GetBookmarkedChaptersByMangaId
-import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.history.interactor.GetNextChapters
@@ -122,7 +122,6 @@ class LibraryViewModel(
     private val getSearchTitles: GetSearchTitles,
     private val getTracksPerManga: GetTracksPerManga,
     private val getNextChapters: GetNextChapters,
-    private val getChaptersByMangaId: GetChaptersByMangaId,
     private val getBookmarkedChaptersByMangaId: GetBookmarkedChaptersByMangaId,
     private val setReadStatus: SetReadStatus,
     private val updateManga: UpdateManga,
@@ -617,29 +616,21 @@ class LibraryViewModel(
         memberIds.mapNotNull { getManga.await(it) }
     // RK <--
 
-    // RK: downloads deliberately do NOT fan out across a merge group. The grouped sources carry the
-    //     same chapters, so downloading every member would fetch each chapter once per source and
-    //     waste the storage on near-duplicates. The right target is the group's deduplicated chapter
-    //     list (what the details "All" view shows), which the library cannot build without the
-    //     aggregation; until it does, this stays on the collapsed primary, which becomes the user's
-    //     chosen trunk once the collapse honours the persisted source ranking.
+    // RK: downloads do NOT fan out across a merge group's members. The grouped sources carry the same
+    //     chapters, so downloading every member would fetch each chapter once per source and waste the
+    //     storage on near-duplicates. The target is the group's deduplicated list, the one the details
+    //     "All" view shows, with each chapter fetched from the source that carries it.
     private fun downloadNextChapters(mangas: List<Manga>, amount: Int?) {
         viewModelScope.launchNonCancellable {
             mangas.forEach { manga ->
-                val chapters = getNextChapters.await(manga.id)
-                    .fastFilterNot { chapter ->
-                        downloadManager.getQueuedDownloadOrNull(chapter.id) != null ||
-                            downloadManager.isChapterDownloaded(
-                                chapter.name,
-                                chapter.scanlator,
-                                chapter.url,
-                                manga.title,
-                                manga.source,
-                            )
-                    }
-                    .let { if (amount != null) it.take(amount) else it }
-
-                downloadManager.downloadChapters(manga, chapters)
+                val group = mergedChapterProvider.load(manga)
+                val unread = if (group.isMerged) {
+                    // The stitch runs newest-first, the way a manga source's own order does.
+                    group.chapters.asReversed().fastFilterNot { it.read || it.id in group.readInOtherSources }
+                } else {
+                    getNextChapters.await(manga.id)
+                }
+                enqueueDownloads(group, manga, unread, amount)
             }
         }
     }
@@ -647,21 +638,45 @@ class LibraryViewModel(
     private fun downloadBookmarkedChapters(mangas: List<Manga>) {
         viewModelScope.launchNonCancellable {
             mangas.forEach { manga ->
-                val chapters = getBookmarkedChaptersByMangaId.await(manga.id)
-                    .fastFilterNot { chapter ->
-                        downloadManager.getQueuedDownloadOrNull(chapter.id) != null ||
-                            downloadManager.isChapterDownloaded(
-                                chapter.name,
-                                chapter.scanlator,
-                                chapter.url,
-                                manga.title,
-                                manga.source,
-                            )
-                    }
-                downloadManager.downloadChapters(manga, chapters)
+                val group = mergedChapterProvider.load(manga)
+                val bookmarked = if (group.isMerged) {
+                    val elsewhere = group.flaggedElsewhere { it.bookmark }
+                    group.chapters.filter { it.bookmark || it.id in elsewhere }
+                } else {
+                    getBookmarkedChaptersByMangaId.await(manga.id)
+                }
+                enqueueDownloads(group, manga, bookmarked, amount = null)
             }
         }
     }
+
+    /** Queue [chapters] from the source each one came from, skipping what the group already holds: a
+     *  chapter downloaded on any member is on disk, whichever copy the stitch shows. */
+    private suspend fun enqueueDownloads(
+        group: MergedChapterProvider.Group,
+        anchor: Manga,
+        chapters: List<Chapter>,
+        amount: Int?,
+    ) {
+        val onDisk = group.flaggedElsewhere { isChapterDownloaded(it, group.mangaById[it.mangaId] ?: anchor) }
+        chapters
+            .fastFilterNot { chapter ->
+                downloadManager.getQueuedDownloadOrNull(chapter.id) != null ||
+                    chapter.id in onDisk ||
+                    isChapterDownloaded(chapter, group.mangaById[chapter.mangaId] ?: anchor)
+            }
+            .let { if (amount != null) it.take(amount) else it }
+            .groupBy { it.mangaId }
+            .forEach { (mangaId, owned) ->
+                downloadManager.downloadChapters(group.mangaById[mangaId] ?: anchor, owned)
+            }
+    }
+
+    private fun MergedChapterProvider.Group.flaggedElsewhere(flag: (Chapter) -> Boolean): Set<Long> =
+        flaggedOnAnotherSource(pooledChapters, chapters, stitch, { it.id }, flag)
+
+    private fun isChapterDownloaded(chapter: Chapter, owner: Manga): Boolean =
+        downloadManager.isChapterDownloaded(chapter.name, chapter.scanlator, chapter.url, owner.title, owner.source)
 
     /**
      * Marks mangas' chapters read status.

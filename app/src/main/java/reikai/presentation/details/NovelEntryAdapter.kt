@@ -101,7 +101,7 @@ class NovelEntryAdapter(
                 scanlator = null,
                 // Read on any source of the merge group, matching the manga side and the badge.
                 read = chapter.read || chapter.id in loaded.readInOtherSources,
-                bookmark = chapter.bookmark,
+                bookmark = chapter.bookmark || chapter.id in loaded.bookmarkedInOtherSources,
                 dateUpload = chapter.dateUpload,
                 chapterNumber = chapter.chapterNumber,
                 sourceOrder = chapter.sourceOrder,

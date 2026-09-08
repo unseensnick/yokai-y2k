@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import reikai.domain.category.GetNovelCategories
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.expandToUnits
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
@@ -140,6 +142,10 @@ class NovelReaderScreenModel(
     /** Which of [orderedIds] a forward step may land on, per the skip settings. Back steps ignore it, so
      *  a skipped chapter stays reachable from the one after it. Built with [orderedIds]. */
     private var forwardEligibleIds: Set<Long> = emptySet()
+
+    /** Chapters unread on their own row but read on another source of the merge group, resolved with
+     *  [orderedIds]. "Skip read" means the group's read state, as every other surface reads it. */
+    private var readInOtherSources: Set<Long> = emptySet()
 
     private val skipDupePref = novelPreferences.readerSkipDuplicateChapters()
     private val skipReadPref = novelPreferences.readerSkipRead()
@@ -401,12 +407,13 @@ class NovelReaderScreenModel(
     /** The merge group's unified chapters in reading order, the novel twin of MergedChapterProvider. A
      *  non-merged novel (or merging disabled) is just its own chapters. The global preferred-source
      *  ranking picks the trunk, matching the details/library aggregation. */
-    private suspend fun resolveGroupChapters(): List<NovelChapter> {
-        val ids = mergeManager.relatedIdsList(novelId)
+    private suspend fun resolveGroupChapters(
+        ids: List<Long>,
+        pooled: List<NovelChapter>,
+        stitch: List<ChapterUnit>,
+    ): List<NovelChapter> {
         if (ids.size <= 1) return chapterRepo.getByNovelId(novelId).sortedWith(readingOrder())
-        val pooled = ids.flatMap { chapterRepo.getByNovelId(it) }
         val sourceIdByNovel = ids.associateWith { novelRepo.getById(it)?.source.orEmpty() }
-        val stitch = mergedChapterProvider.stitchOf(novelId)
         val merged = mergedChapterProvider.merged(pooled, stitch).sortedWith(readingOrder())
         return dedupIfEnabled(merged, sourceIdByNovel)
     }
@@ -749,12 +756,13 @@ class NovelReaderScreenModel(
         val bookmarkFilter = novel.effectiveBookmarkedFilter(novelPreferences)
         val downloadFilter = novel.effectiveDownloadedFilter(novelPreferences)
         return chapters.filterTo(HashSet()) { ch ->
+            val isRead = ch.read || ch.id in readInOtherSources
             when {
                 ch.id == currentId -> true
-                skipRead && ch.read -> false
+                skipRead && isRead -> false
                 !skipFiltered -> true
-                readFilter == NovelChapterFlags.SHOW_UNREAD && ch.read -> false
-                readFilter == NovelChapterFlags.SHOW_READ && !ch.read -> false
+                readFilter == NovelChapterFlags.SHOW_UNREAD && isRead -> false
+                readFilter == NovelChapterFlags.SHOW_READ && !isRead -> false
                 bookmarkFilter == NovelChapterFlags.SHOW_BOOKMARKED && !ch.bookmark -> false
                 bookmarkFilter == NovelChapterFlags.SHOW_NOT_BOOKMARKED && ch.bookmark -> false
                 downloadFilter == NovelChapterFlags.SHOW_DOWNLOADED && ch.id !in downloaded -> false
@@ -779,10 +787,15 @@ class NovelReaderScreenModel(
                 // unified list, so keep it (placed by chapter number) or prev/next would break.
                 // The chapters stay chapters through both filters: reducing to ids here meant reading
                 // every one of them back out of the database a row at a time before the first paint.
+                // Both scopes need the group behind the opened novel: source scope shows one source's
+                // rows, but whether the story has been read is not a property of the row.
+                val ids = mergeManager.relatedIdsList(novelId)
+                val pooled = if (ids.size <= 1) emptyList() else ids.flatMap { chapterRepo.getByNovelId(it) }
+                val stitch = if (pooled.isEmpty()) emptyList() else mergedChapterProvider.stitchOf(novelId)
                 val resolved = if (sourceScoped) {
                     dedupIfEnabled(chapterRepo.getByNovelId(novelId).sortedWith(readingOrder()))
                 } else {
-                    val chapters = resolveGroupChapters()
+                    val chapters = resolveGroupChapters(ids, pooled, stitch)
                     if (chapters.any { it.id == currentId }) {
                         chapters
                     } else {
@@ -794,6 +807,7 @@ class NovelReaderScreenModel(
                 // always kept (filterHiddenChapters guards currentId).
                 val visible = filterHiddenChapters(resolved)
                 orderedIds = visible.map { it.id }
+                readInOtherSources = flaggedOnAnotherSource(pooled, visible, stitch, { it.id }, { it.read })
                 forwardEligibleIds = resolveForwardEligible(visible)
             }
             val id = currentId

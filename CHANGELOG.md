@@ -269,6 +269,12 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Saving Edit info on a merged novel with a source chip selected no longer stores that source's details as your edits.** Opening the editor from a selected source and saving untouched used to keep its differing title, tags and cover as permanent overrides.
 - **Share and Open in WebView now follow the source chip you have selected, on novels as well as manga.**
 - **Migrating and cover edits now always act on the whole merged series, whichever source chip is selected.** A custom title also stays visible while a chip is selected.
+- **Download next on a merged series now downloads the group's combined chapter list, once per chapter.** It followed only the leading source, so it fetched chapters you were not reading and skipped the ones you were.
+- **A merged series no longer offers to download a chapter one of its sources already has on disk.** Deleting one from the list removes every source's copy of it.
+- **A chapter you bookmarked before merging its series now still shows as bookmarked in the combined list.** The bookmarked filter follows the same answer.
+- **The reader's "Skip chapters marked read" now skips a chapter read on another source of a merged series.** So do the reader's chapter filters and the details screen's Unread and Bookmarked filters.
+- **Marking read or bookmarking a merged row in Updates or History now applies to every source in the group, as it does in the library.**
+- **Continue reading a merged series from Updates or History now opens the same chapter the library would.** The two picked differently because one of them ordered the group by chapter number, which its sources count differently.
 
 **Migration**
 

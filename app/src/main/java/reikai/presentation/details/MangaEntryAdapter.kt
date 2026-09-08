@@ -130,7 +130,7 @@ class MangaEntryAdapter(
             name = chapter.name,
             scanlator = chapter.scanlator,
             read = isRead,
-            bookmark = chapter.bookmark,
+            bookmark = isBookmarked,
             dateUpload = chapter.dateUpload,
             chapterNumber = chapter.chapterNumber,
             sourceOrder = chapter.sourceOrder,

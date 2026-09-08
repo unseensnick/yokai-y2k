@@ -25,6 +25,7 @@ import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.manga.MangaMergeManager
 import reikai.domain.manga.MergedChapterProvider
+import reikai.domain.merge.expandToUnits
 import reikai.domain.reader.ChapterProgress
 import reikai.domain.recents.RecentlyAddedManga
 import reikai.domain.recents.RecentlyAddedRepository
@@ -35,6 +36,7 @@ import reikai.presentation.browse.AddFavoriteResult
 import reikai.presentation.browse.MangaLibraryAdder
 import reikai.presentation.browse.components.toDuplicateCard
 import reikai.presentation.browse.decideAdd
+import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.service.getChapterSort
@@ -209,7 +211,8 @@ class MangaRecentsAdapter(
                 rowChapterId = lane.chapter.chapterId,
             )
             RecentsLane.Added -> firstUnreadOf(groupChapters.map { it.toRecentsChapter(readElsewhere) })
-                ?: getNextChapters.await(mangaId, onlyUnread = true).firstOrNull()
+                ?: getNextChapters.await(mangaId, onlyUnread = true)
+                    .firstOrNull { it.id !in readElsewhere }
                     ?.also { chapters[it.id] = it }
                     ?.id
         } ?: return null
@@ -217,14 +220,15 @@ class MangaRecentsAdapter(
     }
 
     /**
-     * Ascending reading order, which every shared target rule expects. A merged list can only be
-     * ordered by chapter number: each source's own order is a scale of its own, and the stitch already
-     * restamped it newest-first for the reader. An unmerged one takes Mihon's own comparator, the same
-     * one `GetNextChapters` applies.
+     * Ascending reading order, which every shared target rule expects. A merged list is ordered by the
+     * position the stitch restamped onto it, which runs newest-first as a manga source's own order
+     * does; a chapter number is not comparable across sources, and sorting by one here reached a
+     * different "first unread" than the library did for the same series. An unmerged list takes
+     * Mihon's own comparator, the one `GetNextChapters` applies.
      */
     private fun readingOrder(manga: Manga?, chapters: List<Chapter>?): List<Chapter> = when {
         manga == null || chapters == null -> chapters.orEmpty()
-        chapters.distinctBy { it.mangaId }.size > 1 -> chapters.sortedBy { it.chapterNumber }
+        chapters.distinctBy { it.mangaId }.size > 1 -> chapters.sortedByDescending { it.sourceOrder }
         else -> chapters.sortedWith(getChapterSort(manga, sortDescending = false))
     }
 
@@ -239,7 +243,7 @@ class MangaRecentsAdapter(
     /** Present only where the updates model is: every verb behind it acts on that model's rows. */
     override val chapterActions: RecentsChapterActions? = updatesModel?.let(::ModelChapterActions)
 
-    private class ModelChapterActions(private val model: UpdatesViewModel) : RecentsChapterActions {
+    private inner class ModelChapterActions(private val model: UpdatesViewModel) : RecentsChapterActions {
 
         // Each verb takes the neutral set and hands the model only its own content type's chapters,
         // so a mixed selection never reaches a provider that cannot act on it. Keyed by chapter id
@@ -247,20 +251,31 @@ class MangaRecentsAdapter(
         private fun Set<ChapterRef>.ownIds(): List<Long> =
             filter { it.entryId is EntryId.Manga }.map { it.chapterId }
 
-        override fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
-            model.markUpdatesRead(chapters.ownIds(), read)
+        // The group's copies of the same merged chapters, off the stored stitch, so a collapsed row's
+        // verb reaches every source the way the details list's does.
+        private suspend fun Set<ChapterRef>.groupIds(): List<Long> = withIOContext {
+            filter { it.entryId is EntryId.Manga }
+                .groupBy { it.entryId.rawId }
+                .flatMap { (mangaId, refs) ->
+                    expandToUnits(refs.mapTo(HashSet()) { it.chapterId }, mergedChapterProvider.stitchOf(mangaId))
+                }
+                .distinct()
         }
 
-        override fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
-            model.bookmarkUpdates(chapters.ownIds(), bookmarked)
+        override suspend fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
+            model.markUpdatesRead(chapters.groupIds(), read)
         }
 
-        override fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
+        override suspend fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
+            model.bookmarkUpdates(chapters.groupIds(), bookmarked)
+        }
+
+        override suspend fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
             model.downloadChapters(chapters.ownIds(), action)
         }
 
-        override fun deleteDownloads(chapters: Set<ChapterRef>) {
-            model.deleteChapters(chapters.ownIds())
+        override suspend fun deleteDownloads(chapters: Set<ChapterRef>) {
+            model.deleteChapters(chapters.groupIds())
         }
     }
 

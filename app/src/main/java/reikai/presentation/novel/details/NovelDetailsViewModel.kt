@@ -55,7 +55,7 @@ import reikai.domain.entry.EntryId
 import reikai.domain.entry.vibrantColorKey
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.merge.expandToUnits
-import reikai.domain.merge.readOnAnotherSource
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterAggregation
 import reikai.domain.novel.NovelChapterListEntry
 import reikai.domain.novel.NovelChapterRepository
@@ -429,8 +429,22 @@ class NovelDetailsViewModel(
             val pooled = byNovel.values.flatten()
             val stitch = mergedChapterProvider.stitchOf(anchor.id)
             val ordered = mergedChapterProvider.merged(pooled, stitch)
-            val readElsewhere = readOnAnotherSource(pooled, ordered, stitch, { it.id }, { it.read })
-            rebuildLoaded(anchor, anchor, ordered, emptyList(), 0, downloadedIdsFor(ordered), readElsewhere)
+            val readElsewhere = flaggedOnAnotherSource(pooled, ordered, stitch, { it.id }, { it.read })
+            val bookmarkedElsewhere = flaggedOnAnotherSource(pooled, ordered, stitch, { it.id }, { it.bookmark })
+            // Probed over every member's chapters, so a merged chapter reads as downloaded when any of
+            // the group's copies holds the file, not only the copy the stitch shows.
+            val downloaded = downloadedIdsFor(pooled)
+            val downloadedElsewhere = flaggedOnAnotherSource(pooled, ordered, stitch, { it.id }) { it.id in downloaded }
+            rebuildLoaded(
+                anchor,
+                anchor,
+                ordered,
+                emptyList(),
+                0,
+                downloaded + downloadedElsewhere,
+                readElsewhere,
+                bookmarkedElsewhere,
+            )
         }
     }
 
@@ -482,8 +496,22 @@ class NovelDetailsViewModel(
             chapters to siblings
         }.collectLatest { (chapters, siblings) ->
             val stitch = mergedChapterProvider.stitchOf(viewNovel.id)
-            val readElsewhere = readOnAnotherSource(chapters + siblings, chapters, stitch, { it.id }, { it.read })
-            rebuildLoaded(anchor, viewNovel, chapters, pages, idx, downloadedIdsFor(chapters), readElsewhere)
+            val pooled = chapters + siblings
+            val readElsewhere = flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }, { it.read })
+            val bookmarkedElsewhere = flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }, { it.bookmark })
+            val downloaded = downloadedIdsFor(pooled)
+            val downloadedElsewhere =
+                flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }) { it.id in downloaded }
+            rebuildLoaded(
+                anchor,
+                viewNovel,
+                chapters,
+                pages,
+                idx,
+                downloaded + downloadedElsewhere,
+                readElsewhere,
+                bookmarkedElsewhere,
+            )
             if (chapters.isEmpty() && isAnchorView) {
                 if (pageKey == null) maybeFirstFetch(viewNovel) else maybeFetchPage(viewNovel, pageKey)
             }
@@ -508,6 +536,7 @@ class NovelDetailsViewModel(
         pageIndex: Int,
         downloadedChapterIds: Set<Long>,
         readInOtherSources: Set<Long> = emptySet(),
+        bookmarkedInOtherSources: Set<Long> = emptySet(),
     ) {
         val hidden = hiddenChaptersPref.get()
         val view = resolveHiddenChapterView(chapters, hidden, showHiddenFlow.value, ::hiddenKey)
@@ -516,7 +545,13 @@ class NovelDetailsViewModel(
         // Hidden chapters are always excluded from the resume target (and downloads); showing hidden only
         // reveals them (dimmed) in the list so they can be unhidden.
         val nonHidden = if (hidden.isEmpty()) chapters else chapters.filterNot { hiddenKey(it) in hidden }
-        val display = view.visible.sortedAndFiltered(anchor, novelPreferences, downloadedChapterIds)
+        val display = view.visible.sortedAndFiltered(
+            anchor,
+            novelPreferences,
+            downloadedChapterIds,
+            readInOtherSources,
+            bookmarkedInOtherSources,
+        )
         val sortDescending = anchor.effectiveSortDescending(novelPreferences)
         // The header total is the sum of the gaps the list itself would mark, so the two can never
         // disagree: counting the pooled numbers instead claimed gaps between chapters of different
@@ -550,6 +585,7 @@ class NovelDetailsViewModel(
                 downloadStates = loaded?.downloadStates.orEmpty(),
                 downloadedChapterIds = downloadedChapterIds,
                 readInOtherSources = readInOtherSources,
+                bookmarkedInOtherSources = bookmarkedInOtherSources,
                 trackingCount = currentTrackingCount,
                 customInfo = currentCustomInfo,
                 dialog = loaded?.dialog,
@@ -1119,7 +1155,9 @@ class NovelDetailsViewModel(
 
     fun toggleChapterBookmark(chapter: NovelChapter) {
         viewModelScope.launchIO {
-            val target = !chapter.bookmark
+            // Toggled against what the row shows, which on a merged entry is the group's own state.
+            val loaded = state.value as? NovelDetailsState.Loaded
+            val target = !(chapter.bookmark || chapter.id in loaded?.bookmarkedInOtherSources.orEmpty())
             expandToGroup(listOf(chapter)).forEach { chapterRepo.setBookmark(it.id, target) }
         }
     }
@@ -1174,7 +1212,11 @@ class NovelDetailsViewModel(
      *  manga path's `executeChapterSwipeAction`, with the same download-state to action mapping). */
     fun chapterSwipe(chapter: NovelChapter, action: LibraryPreferences.ChapterSwipeAction) {
         when (action) {
-            LibraryPreferences.ChapterSwipeAction.ToggleRead -> markChapterRead(chapter, !chapter.read)
+            // Toggled against the row's shown state, so a chapter read on a grouped source turns unread.
+            LibraryPreferences.ChapterSwipeAction.ToggleRead -> {
+                val readElsewhere = (state.value as? NovelDetailsState.Loaded)?.readInOtherSources.orEmpty()
+                markChapterRead(chapter, !(chapter.read || chapter.id in readElsewhere))
+            }
             LibraryPreferences.ChapterSwipeAction.ToggleBookmark -> toggleChapterBookmark(chapter)
             LibraryPreferences.ChapterSwipeAction.Download -> {
                 val loaded = state.value as? NovelDetailsState.Loaded
@@ -1211,7 +1253,10 @@ class NovelDetailsViewModel(
                 promptAddToLibraryOnFirstDownload()
             }
             ChapterDownloadAction.CANCEL -> downloadManager.cancelDownloads(listOf(chapter.id))
-            ChapterDownloadAction.DELETE -> downloadManager.deleteChapters(listOf(chapter))
+            // Every copy: the row shows downloaded when any of them holds the file.
+            ChapterDownloadAction.DELETE -> viewModelScope.launchIO {
+                downloadManager.deleteChapters(expandToGroup(listOf(chapter)))
+            }
         }
     }
 
@@ -1250,7 +1295,13 @@ class NovelDetailsViewModel(
             // Already resolved per owning novel, which a merged list needs.
             val downloadedIds = loaded.downloadedChapterIds
             val queuedIds = downloadManager.queueState.value.mapTo(HashSet()) { it.chapterId }
-            val targets = selectChaptersForDownloadAction(available, action, downloadedIds + queuedIds)
+            val targets = selectChaptersForDownloadAction(
+                available,
+                action,
+                downloadedIds + queuedIds,
+                loaded.readInOtherSources,
+                loaded.bookmarkedInOtherSources,
+            )
             if (targets.isNotEmpty()) {
                 downloadManager.downloadChapters(targets)
                 promptAddToLibraryOnFirstDownload()
@@ -1267,7 +1318,9 @@ class NovelDetailsViewModel(
     }
 
     fun deleteChapters(chapters: List<NovelChapter>) {
-        viewModelScope.launchIO { downloadManager.deleteChapters(chapters) }
+        // Expanded first: the row is downloaded when ANY copy holds the file, so deleting only the
+        // shown copy would leave the row still reading as downloaded.
+        viewModelScope.launchIO { downloadManager.deleteChapters(expandToGroup(chapters)) }
         clearSelection()
         dismissDialog()
     }
@@ -1338,6 +1391,10 @@ sealed interface NovelDetailsState {
         val downloadedChapterIds: Set<Long> = emptySet(),
         /** Chapters unread on their own row but already read on another source of the merge group. */
         val readInOtherSources: Set<Long> = emptySet(),
+        /** The same, for the bookmark flag. Writes reach every copy already, so this shows through only
+         *  where the copies were never in sync: a bookmark set before the sources were merged, or one a
+         *  backup restored onto a copy the stitch does not show. */
+        val bookmarkedInOtherSources: Set<Long> = emptySet(),
         /** Bound trackers on a logged-in service; drives the details action-row Tracking button. */
         val trackingCount: Int = 0,
         /** Non-destructive edit-info overlay; the display applies it over [displayNovel] (the raw novel

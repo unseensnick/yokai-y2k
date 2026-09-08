@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import reikai.domain.category.RecentsSurface
 import reikai.domain.category.recentsCategoryFilterFlow
 import reikai.domain.entry.EntryId
@@ -408,21 +409,17 @@ class RecentsEngine(
      * One row's own download control, which does not touch the selection: it is not a bulk action and
      * the indicator is only reachable while nothing is selected.
      */
-    fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) {
-        activeProviders().mapNotNull { it.chapterActions }.forEach { it.download(chapters, action) }
-    }
+    fun download(chapters: Set<ChapterRef>, action: ChapterDownloadAction) =
+        dispatch { it.download(chapters, action) }
 
     /**
      * One row's own read and bookmark toggles, for a swipe. Separate from the selection verbs above
      * because a swipe acts on the row under the finger and must leave a running selection standing.
      */
-    fun markRead(chapters: Set<ChapterRef>, read: Boolean) {
-        activeProviders().mapNotNull { it.chapterActions }.forEach { it.markRead(chapters, read) }
-    }
+    fun markRead(chapters: Set<ChapterRef>, read: Boolean) = dispatch { it.markRead(chapters, read) }
 
-    fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) {
-        activeProviders().mapNotNull { it.chapterActions }.forEach { it.setBookmark(chapters, bookmarked) }
-    }
+    fun setBookmark(chapters: Set<ChapterRef>, bookmarked: Boolean) =
+        dispatch { it.setBookmark(chapters, bookmarked) }
 
     fun deleteDownloads(chapters: Set<ChapterRef>) = dispatchAndClear { it.deleteDownloads(chapters) }
 
@@ -627,8 +624,16 @@ class RecentsEngine(
             .stateIn(viewModelScope, SharingStarted.Eagerly, RecentsRowGate.NONE)
     }
 
-    private fun dispatchAndClear(action: (RecentsChapterActions) -> Unit) {
-        activeProviders().mapNotNull { it.chapterActions }.forEach(action)
+    /** The verbs are suspend because a merged row's action has to read the group's stitch first; the
+     *  selection still clears at once, so the bar closes on the tap rather than on the write. Launched
+     *  undispatched, since each provider moves its own work off the main thread where it does any. */
+    private fun dispatch(action: suspend (RecentsChapterActions) -> Unit) {
+        val targets = activeProviders().mapNotNull { it.chapterActions }
+        viewModelScope.launch { targets.forEach { action(it) } }
+    }
+
+    private fun dispatchAndClear(action: suspend (RecentsChapterActions) -> Unit) {
+        dispatch(action)
         clearSelection()
     }
 

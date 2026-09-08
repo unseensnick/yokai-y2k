@@ -40,12 +40,14 @@ import reikai.domain.library.toSortMode
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
+import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.interactor.GetCustomNovelInfo
 import reikai.domain.novel.interactor.GetNextNovelChapter
 import reikai.domain.novel.interactor.GetNovelTracks
+import reikai.domain.novel.interactor.NovelGroupChapters
 import reikai.domain.novel.interactor.SetNovelCategories
 import reikai.domain.novel.interactor.SetNovelReadStatus
 import reikai.domain.novel.interactor.UpdateNovel
@@ -520,29 +522,44 @@ class NovelLibraryViewModel(
     }
 
     fun performDownloadAction(ids: List<Long>, action: DownloadAction) {
-        // Deliberately NOT expanded: grouped sources carry the same chapters, so downloading every
+        // NOT expanded over the group's members: they carry the same chapters, so downloading every
         // member would fetch each chapter once per source and waste the storage on near-duplicates.
-        // The right target is the group's deduplicated list (the details "All" view), which the
-        // library cannot build without the aggregation; until it does, this stays on the
-        // representative, which becomes the user's chosen trunk once the collapse honours the
-        // persisted source ranking.
-        val novelIds = ids
+        // The target is the group's deduplicated list, the one the details "All" view shows, with each
+        // chapter fetched from the source that carries it.
         viewModelScope.launchNonCancellable {
-            novelIds.forEach { id ->
-                val novel = novelRepository.getById(id) ?: return@forEach
-                val chapters = novelChapterRepository.getByNovelId(id)
+            ids.forEach { id ->
+                val group = getNextNovelChapter.groupChapters(id)
                 val downloadManager = novelDownloadManager()
-                val downloadedIds = chapters
-                    .filter { downloadManager.isChapterDownloaded(novel, it) }
-                    .mapTo(HashSet()) { it.id }
-                val queuedIds = downloadManager.queueState.value
-                    .filter { it.novelId == id }
-                    .mapTo(HashSet()) { it.chapterId }
-                val targets = selectChaptersForDownloadAction(chapters, action, downloadedIds + queuedIds)
+                // Probed over every member's chapters: a chapter downloaded on any of them is on disk,
+                // whichever copy the stitch shows.
+                val novelsById = group.pooled.map { it.novelId }.distinct()
+                    .mapNotNull { novelId -> novelRepository.getById(novelId)?.let { novelId to it } }
+                    .toMap()
+                val downloadedIds = group.pooled
+                    .groupBy { it.novelId }
+                    .flatMapTo(HashSet()) { (novelId, chapters) ->
+                        novelsById[novelId]?.let { novel ->
+                            chapters.filter { downloadManager.isChapterDownloaded(novel, it) }
+                        }
+                            .orEmpty()
+                            .map { it.id }
+                    }
+                val onDisk = downloadedIds + group.flaggedElsewhere { it.id in downloadedIds }
+                val queuedIds = downloadManager.queueState.value.mapTo(HashSet()) { it.chapterId }
+                val targets = selectChaptersForDownloadAction(
+                    group.chapters,
+                    action,
+                    onDisk + queuedIds,
+                    group.readInOtherSources,
+                    group.flaggedElsewhere { it.bookmark },
+                )
                 if (targets.isNotEmpty()) downloadManager.downloadChapters(targets)
             }
         }
     }
+
+    private fun NovelGroupChapters.flaggedElsewhere(flag: (NovelChapter) -> Boolean): Set<Long> =
+        flaggedOnAnotherSource(pooled, chapters, stitch, { it.id }, flag)
 
     /** Writes exactly the ids it is handed; the caller expands the merge group. */
     fun setNovelCategories(novelIds: List<Long>, addCategories: List<Long>, removeCategories: List<Long>) {

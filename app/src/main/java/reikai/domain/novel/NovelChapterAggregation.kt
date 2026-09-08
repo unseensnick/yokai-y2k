@@ -2,7 +2,6 @@ package reikai.domain.novel
 
 import reikai.domain.merge.MergedChapterOrder
 import reikai.domain.merge.MergedChapters
-import reikai.domain.merge.crossSourceReadIds
 import reikai.domain.merge.unstitchedChapters
 import reikai.domain.novel.model.NovelChapter
 
@@ -92,18 +91,6 @@ object NovelChapterAggregation {
         }
         return MergedChapters(merged, stitched.units { it.id })
     }
-
-    /** The shared cross-source read carry-over, over this type's title-first identity. */
-    fun readInOtherSources(
-        chaptersByNovel: Map<Long, List<NovelChapter>>,
-        unified: List<NovelChapter>,
-    ): Set<Long> = crossSourceReadIds(
-        bySource = chaptersByNovel,
-        unified = unified,
-        id = { it.id },
-        read = { it.read },
-        key = ::matchKey,
-    )
 
     /**
      * The member novel ids in trunk order (first = trunk), the same ranking [aggregate] applies. Lets the
