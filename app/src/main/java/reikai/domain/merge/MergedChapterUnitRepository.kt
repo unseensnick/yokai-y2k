@@ -38,6 +38,13 @@ interface MergedChapterUnitRepository {
     fun getUnreadCountsAsFlow(contentType: ContentType): Flow<Map<Long, Long>>
 
     /**
+     * Every merged group's member chapters, keyed by group, with what a download probe needs to find
+     * the file. Whether one is on disk lives on disk, not here, so the count is the caller's to take:
+     * it probes these rows and counts the merged chapters that answer.
+     */
+    suspend fun getDownloadUnits(contentType: ContentType): Map<Long, List<DownloadUnitRow>>
+
+    /**
      * How many of its group's chapters each merged manga covers, keyed by manga id: the count the
      * stitch ranks the trunk on, so the collapsed library row leads on the same source the details
      * chapter list does. An empty map means nothing is stitched yet, which callers must tell apart

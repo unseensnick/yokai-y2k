@@ -53,7 +53,10 @@ import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
 import reikai.domain.library.updateerror.DeleteLibraryUpdateErrors
 import reikai.domain.library.updateerror.UpsertLibraryUpdateError
+import reikai.domain.merge.MergeGroupRepository
+import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
+import reikai.domain.merge.collapseNewChapters
 import reikai.util.workRunningFlow
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.preference.getAndSet
@@ -121,8 +124,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     @Inject private lateinit var deleteLibraryUpdateErrors: DeleteLibraryUpdateErrors
     private val updateErrorLog = UpdateErrorLog(context)
 
-    // RK: keeps a merged entry's deduplicated unread count in step with newly fetched chapters
+    // RK: keeps a merged entry's deduplicated unread count in step with newly fetched chapters, and
+    //     collapses a run's new chapters so a merge group counts one arrival rather than one per source
     @Inject private lateinit var reconcileMergedChapters: ReconcileMergedChapters
+
+    @Inject private lateinit var mergeGroupRepository: MergeGroupRepository
+
+    @Inject private lateinit var mergedChapterUnitRepository: MergedChapterUnitRepository
 
     @Inject private lateinit var notifier: LibraryUpdateNotifier
 
@@ -285,7 +293,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
         val failedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
-        val hasDownloads = AtomicBoolean(false)
+        // RK: held until the run ends, where the merge groups are collapsed; see [collapseNewChapters].
+        val pendingDownloads = CopyOnWriteArrayList<Pair<Manga, List<Chapter>>>()
         val timeZone = TimeZone.currentSystemDefault()
         val fetchWindow = fetchInterval.getWindow(Clock.System.now().toLocalDateTime(timeZone).date, timeZone)
 
@@ -313,14 +322,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             .sortedByDescending { it.sourceOrder }
 
                                         if (newChapters.isNotEmpty()) {
+                                            // RK: queued after the run rather than here, so a merge
+                                            //     group's sources cannot each fetch the same chapter.
+                                            //     Nothing starts downloading mid-run either way.
                                             val chaptersToDownload = filterChaptersForDownload.await(manga, newChapters)
-
                                             if (chaptersToDownload.isNotEmpty()) {
-                                                downloadChapters(manga, chaptersToDownload)
-                                                hasDownloads.store(true)
+                                                pendingDownloads.add(manga to chaptersToDownload)
                                             }
-
-                                            libraryPreferences.newUpdatesCount.getAndSet { it + newChapters.size }
 
                                             // Convert to the manga that contains new chapters
                                             newUpdates.add(manga to newChapters.toTypedArray())
@@ -362,14 +370,26 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         notifier.cancelProgressNotification()
 
         if (newUpdates.isNotEmpty()) {
-            // RK: new chapters change what a merged entry's deduplicated unread count should be, so
-            //     bring the stored cross-source identities back in step. Cheap when nothing changed,
-            //     and only covers merged entries.
+            // RK --> new chapters change what a merged entry's deduplicated unread count should be, so
+            //        bring the stored cross-source identities back in step first. Cheap when nothing
+            //        changed, and only covers merged entries. Then count, announce and download one
+            //        copy per merged chapter: a group's sources each report the same chapter, and
+            //        counting them apart told the user it had arrived once per source.
             reconcileMergedChapters.await()
-            notifier.showUpdateNotifications(newUpdates)
-            if (hasDownloads.load()) {
+            val kept = collapseNewUpdates(newUpdates)
+            val announced = newUpdates.mapNotNull { (manga, chapters) ->
+                chapters.filter { it.id in kept }.takeIf { it.isNotEmpty() }?.let { manga to it.toTypedArray() }
+            }
+            libraryPreferences.newUpdatesCount.getAndSet { count -> count + announced.sumOf { it.second.size } }
+            notifier.showUpdateNotifications(announced)
+            val toDownload = pendingDownloads.mapNotNull { (manga, chapters) ->
+                chapters.filter { it.id in kept }.takeIf { it.isNotEmpty() }?.let { manga to it }
+            }
+            toDownload.forEach { (manga, chapters) -> downloadChapters(manga, chapters) }
+            if (toDownload.isNotEmpty()) {
                 downloadManager.startDownloads()
             }
+            // RK <--
         }
 
         // RK --> the dump is one file shared with the novel updater, rewritten on every run so an
@@ -392,6 +412,17 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             )
         }
         // RK <--
+    }
+
+    /** RK: the chapter ids this run should act on, one per merged chapter. Only the groups that
+     *  actually updated are resolved, so a library with no merged entry pays one membership query. */
+    private suspend fun collapseNewUpdates(updates: List<Pair<Manga, Array<Chapter>>>): Set<Long> {
+        val newByManga = updates.associate { (manga, chapters) -> manga.id to chapters.toList() }
+        val groupOf = mergeGroupRepository.getAllMemberships(ContentType.MANGA)
+            .filterKeys { it in newByManga.keys }
+        val stitches = groupOf.values.distinct()
+            .associateWith { mergedChapterUnitRepository.getStitch(ContentType.MANGA, it) }
+        return collapseNewChapters(newByManga, groupOf, stitches) { it.id }
     }
 
     private suspend fun downloadChapters(manga: Manga, chapters: List<Chapter>) {

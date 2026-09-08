@@ -277,6 +277,9 @@ Reikai uses its own [Semantic Versioning](https://semver.org/) from the Mihon-ba
 - **Marking read, bookmarking or deleting a download on a merged row in Updates now applies to every source in the group, as it does in the library.** The same goes for the Recents tab, if you have turned it on.
 - **Continue reading a merged series from History now opens the same chapter the library would.** The two picked differently because History ordered the group by chapter number, which its sources count differently.
 - **A merged row in Updates and History now shows the read and bookmarked state the series page shows.** It reported whichever source's copy the row happened to name.
+- **A merged series' library update now announces a new chapter once, not once per source that carries it.** It also downloads that chapter once, where each source used to fetch its own copy.
+- **The download badge on a merged series counts a chapter once, however many of its sources hold it.**
+- **The Updates widget now draws one cover per merged series.** It drew one per source, so a grouped series filled the grid.
 
 **Migration**
 

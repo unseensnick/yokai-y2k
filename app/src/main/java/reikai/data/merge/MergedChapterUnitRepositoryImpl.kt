@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import reikai.domain.library.ContentType
 import reikai.domain.merge.ChapterUnit
+import reikai.domain.merge.DownloadUnitRow
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.MergedChapterUnitRepository.StoredUnit
 import tachiyomi.data.Database
@@ -52,6 +53,16 @@ class MergedChapterUnitRepositoryImpl(
             ContentType.NOVELS -> queries.unreadCountsByGroupNovel { groupId, unread -> groupId to unread }
             else -> queries.unreadCountsByGroup { groupId, unread -> groupId to unread }
         }.subscribeToList().map { it.toMap() }
+
+    override suspend fun getDownloadUnits(contentType: ContentType): Map<Long, List<DownloadUnitRow>> =
+        when (contentType) {
+            ContentType.NOVELS -> queries.downloadUnitsByGroupNovel { groupId, unit, ownerId, name, url ->
+                DownloadUnitRow(groupId, unit!!.toInt(), ownerId, name, scanlator = null, chapterUrl = url)
+            }
+            else -> queries.downloadUnitsByGroup { groupId, unit, ownerId, name, scanlator, url ->
+                DownloadUnitRow(groupId, unit!!.toInt(), ownerId, name, scanlator, url)
+            }
+        }.awaitAsList().groupBy { it.groupId }
 
     override suspend fun getCoveredChapterCounts(): Map<Long, Long> =
         queries.coveredChapterCountsByManga().awaitAsList().associate { it.mangaId to it.coveredCount }

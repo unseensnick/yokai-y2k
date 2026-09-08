@@ -40,6 +40,7 @@ import reikai.domain.library.toSortMode
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
+import reikai.domain.merge.downloadedUnitsByGroup
 import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelMergeManager
@@ -299,6 +300,24 @@ class NovelLibraryViewModel(
         return node.chapterSearchTerms().associateWith { novelChapterRepository.getNovelIdsWithChapterNameLike(it) }
     }
 
+    /**
+     * Merged chapters with a copy on disk, per group. Members that have downloaded nothing are never
+     * probed, so a library whose merged novels hold no downloads pays one indexed query. Twin of the
+     * manga library's, over the same kernel.
+     */
+    private suspend fun mergedDownloadCounts(library: List<LibraryNovel>): Map<Long, Int> {
+        val withDownloads = library.filter { it.downloadCount > 0 }
+        if (withDownloads.isEmpty()) return emptyMap()
+        val novelById = withDownloads.associate { it.novel.id to it.novel }
+        return downloadedUnitsByGroup(
+            rowsByGroup = mergedChapterUnitRepository.getDownloadUnits(ContentType.NOVELS),
+            ownersWithDownloads = novelById.keys,
+        ) { row ->
+            val owner = novelById.getValue(row.ownerId)
+            novelDownloadCache.isChapterDownloaded(owner.source, owner.title, row.chapterName, row.chapterUrl)
+        }
+    }
+
     private suspend fun buildState(
         categories: List<Category>,
         library: List<LibraryNovel>,
@@ -329,10 +348,18 @@ class NovelLibraryViewModel(
         // been stitched yet, so it keeps the representative's own count: reading that as zero badged a
         // freshly stitched library as fully read until something made the list rebuild.
         val mergedUnread = if (settings.merge.mergingEnabled) settings.merge.mergedUnread else emptyMap()
+        // Downloads take the same treatment, which summing the members double-counted for every chapter
+        // two of them hold. Absent means the group holds none; an empty map means nothing probed it.
+        val mergedDownloads = if (settings.merge.mergingEnabled) mergedDownloadCounts(withCounts) else emptyMap()
         val groups = collapsedAll.map { group ->
             val groupId = settings.merge.membership[group.representative.novel.id]
-            val merged = groupId?.takeIf { group.memberIds.size > 1 }?.let { mergedUnread[it] }
-            if (merged == null) group else group.copy(unreadCount = merged)
+                ?.takeIf { group.memberIds.size > 1 }
+            val merged = groupId?.let { mergedUnread[it] }
+            val downloads = groupId?.takeIf { mergedDownloads.isNotEmpty() }?.let { mergedDownloads[it] ?: 0 }
+            group.copy(
+                unreadCount = merged ?: group.unreadCount,
+                totalDownloadCount = downloads?.toLong() ?: group.totalDownloadCount,
+            )
         }
         // Union each merge group's member tracks (deduped per tracker), keyed by the rep's real novel id,
         // so the shared filter's tracker axis and the sort's mean score both read a track bound on ANY

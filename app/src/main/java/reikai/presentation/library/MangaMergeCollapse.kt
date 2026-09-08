@@ -28,6 +28,9 @@ object MangaMergeCollapse {
         // fallback, briefly over-reporting from the primary's own count; telling the two apart would
         // need a backfill marker, and any group gaining an unread chapter corrects it.
         mergedUnreadByGroup: Map<Long, Long> = emptyMap(),
+        // Group id -> merged chapters with a copy on disk. Absent means the group holds none; empty
+        // means nothing probed it, where the members' own counts are summed as before.
+        mergedDownloadsByGroup: Map<Long, Int> = emptyMap(),
         // Mirrors the unread-badge preference, so a merged count never lights a badge the user turned off.
         showUnreadBadge: Boolean = true,
         // Group id -> member manga ids in trunk order, only for groups whose per-group source-order
@@ -68,6 +71,11 @@ object MangaMergeCollapse {
                         // Absent group = nothing unread. Null only when the map has no data at all.
                         mergedUnread = if (groupId != null && mergedUnreadByGroup.isNotEmpty()) {
                             mergedUnreadByGroup[groupId] ?: 0L
+                        } else {
+                            null
+                        },
+                        mergedDownloads = if (groupId != null && mergedDownloadsByGroup.isNotEmpty()) {
+                            mergedDownloadsByGroup[groupId] ?: 0
                         } else {
                             null
                         },
@@ -116,6 +124,7 @@ object MangaMergeCollapse {
         showMergeSourceIcons: Boolean,
         resolveSource: suspend (Long) -> Source,
         mergedUnread: Long?,
+        mergedDownloads: Int?,
         showUnreadBadge: Boolean,
         distinctChapterCounts: Map<Long, Long>,
     ): LibraryItem {
@@ -125,8 +134,11 @@ object MangaMergeCollapse {
         // chapter they share. Falls back to the primary's own count when the group has not been stitched
         // yet, which under-reports rather than inventing a number.
         val unread = mergedUnread ?: primary.unreadCount
+        // Downloads count the same way: one per chapter the group holds, however many of its sources
+        // hold it. Null is a group nothing has stitched, where the sum is the only answer available.
+        val downloads = mergedDownloads ?: subGroup.sumOf { it.downloadCount }
         return primary.copy(
-            downloadCount = subGroup.sumOf { it.downloadCount },
+            downloadCount = downloads,
             unreadCount = unread,
             // LastRead sorts by the most recent read across all members, not just the primary's own, so
             // reading any source bubbles the merged entry up.
@@ -138,7 +150,8 @@ object MangaMergeCollapse {
             libraryManga = primary.libraryManga.copy(lastRead = subGroup.maxOf { it.libraryManga.lastRead }),
             relatedMangaIds = subGroup.map { it.libraryManga.manga.id },
             badges = primary.badges.copy(
-                downloadCount = subGroup.sumOf { it.badges.downloadCount },
+                // Zero when the badge is off, which is how every member reports it then.
+                downloadCount = if (subGroup.any { it.badges.downloadCount > 0 }) downloads else 0,
                 unreadCount = if (showUnreadBadge) unread else 0,
                 mergedSources = if (showMergeSourceIcons) {
                     subGroup.map { resolveSource(it.libraryManga.manga.source) }

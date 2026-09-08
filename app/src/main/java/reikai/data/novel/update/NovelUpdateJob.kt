@@ -40,7 +40,10 @@ import reikai.data.updateerror.UpdateErrorLog
 import reikai.domain.category.GetNovelCategories
 import reikai.domain.library.ContentType
 import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.MergeGroupRepository
+import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
+import reikai.domain.merge.collapseNewChapters
 import reikai.domain.novel.NovelChapterRepository
 import reikai.domain.novel.NovelPreferences
 import reikai.domain.novel.NovelRepository
@@ -108,6 +111,10 @@ class NovelUpdateJob(
 
     // Keeps a merged entry's deduplicated unread count in step with newly fetched chapters
     @Inject private lateinit var reconcileMergedChapters: ReconcileMergedChapters
+
+    @Inject private lateinit var mergeGroupRepository: MergeGroupRepository
+
+    @Inject private lateinit var mergedChapterUnitRepository: MergedChapterUnitRepository
     private val notifier = NovelUpdateNotifier(context)
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
@@ -163,7 +170,7 @@ class NovelUpdateJob(
         // the manga updater's does, which it cannot do from a total.
         val updates = mutableListOf<Pair<Novel, List<NovelChapter>>>()
         val failed = mutableListOf<UpdateErrorEntry>()
-        var newChapterTotal = 0
+        val pendingDownloads = mutableListOf<NovelChapter>()
         favorites.forEachIndexed { index, novel ->
             currentCoroutineContext().ensureActive()
             // [index] is how many are already done, which is what the bar reports while this one runs.
@@ -173,10 +180,10 @@ class NovelUpdateJob(
                 val newChapters = checkNovel(novel, source)
                 if (newChapters.isNotEmpty()) {
                     updates.add(novel to newChapters)
-                    newChapterTotal += newChapters.size
+                    // Queued after the run rather than here, so a merge group's sources cannot each
+                    // fetch the same chapter.
                     if (downloadNew) {
-                        val toDownload = filterChaptersForDownload(novel, newChapters)
-                        if (toDownload.isNotEmpty()) downloadManager.downloadChapters(toDownload)
+                        pendingDownloads += filterChaptersForDownload(novel, newChapters)
                     }
                 }
                 // A successful check clears any previously recorded error.
@@ -196,21 +203,45 @@ class NovelUpdateJob(
             // the same pair around each entry.
             notifier.showProgress(novel.title, index + 1, favorites.size)
         }
+        val announced = if (updates.isEmpty()) {
+            updates
+        } else {
+            // New chapters change what a merged entry's deduplicated unread count should be, so bring
+            // the stored cross-source identities back in step first. Cheap when nothing changed, and
+            // only covers merged entries. Then count, announce and download one copy per merged
+            // chapter: a group's sources each report the same chapter, and counting them apart told
+            // the user it had arrived once per source.
+            reconcileMergedChapters.await()
+            val kept = collapseNewUpdates(updates)
+            val toDownload = pendingDownloads.filter { it.id in kept }
+            if (toDownload.isNotEmpty()) downloadManager.downloadChapters(toDownload)
+            updates.mapNotNull { (novel, chapters) ->
+                chapters.filter { it.id in kept }.takeIf { it.isNotEmpty() }?.let { novel to it }
+            }
+        }
+        val newChapterTotal = announced.sumOf { it.second.size }
         // Feed the shared Updates-icon badge (manga + novel share one total; reset on Updates open).
         if (newChapterTotal > 0) {
             libraryPreferences.newUpdatesCount.getAndSet { it + newChapterTotal }
-            // New chapters change what a merged entry's deduplicated unread count should be, so bring
-            // the stored cross-source identities back in step. Cheap when nothing changed, and only
-            // covers merged entries.
-            reconcileMergedChapters.await()
         }
-        notifier.showResults(updates)
+        notifier.showResults(announced)
         // The dump is one file shared with the manga updater, rewritten on every run so a novel that
         // has since updated stops appearing in it.
         val errorFile = updateErrorLog.write(ContentType.NOVELS, failed)
         if (failed.isNotEmpty()) {
             notifier.showUpdateErrors(failed.size, errorFile.getUriCompat(context), trackErrors)
         }
+    }
+
+    /** The chapter ids this run should act on, one per merged chapter. The twin of the manga job's,
+     *  over the same kernel. */
+    private suspend fun collapseNewUpdates(updates: List<Pair<Novel, List<NovelChapter>>>): Set<Long> {
+        val newByNovel = updates.associate { (novel, chapters) -> novel.id to chapters }
+        val groupOf = mergeGroupRepository.getAllMemberships(ContentType.NOVELS)
+            .filterKeys { it in newByNovel.keys }
+        val stitches = groupOf.values.distinct()
+            .associateWith { mergedChapterUnitRepository.getStitch(ContentType.NOVELS, it) }
+        return collapseNewChapters(newByNovel, groupOf, stitches) { it.id }
     }
 
     /** Re-parse the novel, persist metadata edit-lock-safely, sync page 1, and walk any newly-opened

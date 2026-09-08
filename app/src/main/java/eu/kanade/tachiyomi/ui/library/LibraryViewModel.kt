@@ -60,6 +60,7 @@ import reikai.domain.manga.downloadedChapterIds
 import reikai.domain.merge.MergeGroupRepository
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.ReconcileMergedChapters
+import reikai.domain.merge.downloadedUnitsByGroup
 import reikai.domain.merge.flaggedOnAnotherSource
 import reikai.presentation.library.LibraryFilterPrefs
 import reikai.presentation.library.LibraryGroup
@@ -515,6 +516,13 @@ class LibraryViewModel(
                 showMergeSourceIcons = mergePrefs.showMergeSourceIcons,
                 resolveSource = ::resolveMergeSource,
                 mergedUnreadByGroup = if (mergePrefs.mergingEnabled) mergePrefs.mergedUnread else emptyMap(),
+                // RK: the same treatment for downloads, which summing the members double-counted for
+                //     every chapter two of them hold.
+                mergedDownloadsByGroup = if (mergePrefs.mergingEnabled) {
+                    mergedDownloadCounts(items)
+                } else {
+                    emptyMap()
+                },
                 showUnreadBadge = preferences.unreadBadge,
                 overrideRankings = mergePrefs.overrideRankings,
                 preferredSourceIds = mergePrefs.preferredSources,
@@ -557,6 +565,29 @@ class LibraryViewModel(
         // library is already on screen, and nothing else makes this flow re-emit when it lands.
         mergedChapterUnitRepository.getUnreadCountsAsFlow(ContentType.MANGA),
     ) { prefs, unread -> prefs.copy(mergedUnread = unread) }
+
+    /**
+     * RK: merged chapters with a copy on disk, per group. Members that have downloaded nothing are
+     * never probed, so a library whose merged entries hold no downloads pays one indexed query.
+     */
+    private suspend fun mergedDownloadCounts(items: List<LibraryItem>): Map<Long, Int> {
+        val withDownloads = items.filter { it.downloadCount > 0 }
+        if (withDownloads.isEmpty()) return emptyMap()
+        val mangaById = withDownloads.associate { it.libraryManga.manga.id to it.libraryManga.manga }
+        return downloadedUnitsByGroup(
+            rowsByGroup = mergedChapterUnitRepository.getDownloadUnits(ContentType.MANGA),
+            ownersWithDownloads = mangaById.keys,
+        ) { row ->
+            val owner = mangaById.getValue(row.ownerId)
+            downloadManager.isChapterDownloaded(
+                row.chapterName,
+                row.scanlator,
+                row.chapterUrl,
+                owner.title,
+                owner.source,
+            )
+        }
+    }
 
     private suspend fun resolveMergeSource(sourceId: Long): DomainSource {
         val s = sourceManager.getOrStub(sourceId)

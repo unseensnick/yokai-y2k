@@ -45,6 +45,40 @@ fun <T> flaggedOnAnotherSource(
 }
 
 /**
+ * The chapters an update run should count, announce and download, once per merged chapter rather than
+ * once per source that reported it. An entry in no group keeps all of its own; within a group a
+ * chapter is news only if the group did not already have that merged chapter, and of several copies
+ * arriving together the stitch's first-ranked one stands for them. [stitches] must be current, so run
+ * the reconciliation first: a group with no stitch keeps every chapter, which is what "not stitched
+ * yet" has to mean rather than "nothing arrived".
+ */
+fun <T> collapseNewChapters(
+    newByEntry: Map<Long, List<T>>,
+    groupOf: Map<Long, Long>,
+    stitches: Map<Long, List<ChapterUnit>>,
+    id: (T) -> Long,
+): Set<Long> {
+    val kept = HashSet<Long>()
+    val pooled = HashMap<Long, MutableList<T>>()
+    newByEntry.forEach { (entryId, chapters) ->
+        val groupId = groupOf[entryId]
+        if (groupId == null) chapters.mapTo(kept, id) else pooled.getOrPut(groupId) { mutableListOf() } += chapters
+    }
+    pooled.forEach { (groupId, chapters) ->
+        val stitch = stitches[groupId].orEmpty()
+        if (stitch.isEmpty()) {
+            chapters.mapTo(kept, id)
+            return@forEach
+        }
+        val arrived = chapters.mapTo(HashSet(), id)
+        val alreadyHad = stitch.asSequence().filter { it.chapterId !in arrived }.mapTo(HashSet()) { it.unit }
+        val placed = stitch.filter { it.chapterId in arrived && it.unit !in alreadyHad }
+        placed.groupBy { it.unit }.values.forEach { copies -> kept += copies.minBy { it.copyOrder }.chapterId }
+    }
+    return kept
+}
+
+/**
  * Every chapter that is the same merged chapter as one of [chapterIds], the given ones included. What
  * an action taken on the merged list has to reach, so marking a chapter read marks the group's copies
  * of it and not a chapter a few along that happens to share a number.

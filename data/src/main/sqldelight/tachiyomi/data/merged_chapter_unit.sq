@@ -237,3 +237,32 @@ AND C.scanlator = ES.scanlator
 WHERE U.unit IS NOT NULL
 AND ES.scanlator IS NULL
 GROUP BY C.manga_id;
+
+-- Every merged group's member chapters, with what a download probe needs to find the file. Whether a
+-- chapter is on disk is not in this database, so the count itself cannot be a query: the caller probes
+-- the download cache over these rows and counts the units that answer. Scanlator rides along because
+-- the manga download folder name is built from it.
+downloadUnitsByGroup:
+SELECT U.group_id AS groupId, U.unit AS unit, C.manga_id AS ownerId, C.name, C.scanlator, C.url
+FROM merged_chapter_unit U
+JOIN chapters C
+ON C._id = U.chapter_id
+JOIN mangas M
+ON M._id = C.manga_id
+AND M.favorite = 1
+LEFT JOIN excluded_scanlators ES
+ON C.manga_id = ES.manga_id
+AND C.scanlator = ES.scanlator
+WHERE U.unit IS NOT NULL
+AND ES.scanlator IS NULL;
+
+-- Novel twin. No scanlator join, and none stored: novels have none (see novelLibraryView).
+downloadUnitsByGroupNovel:
+SELECT U.group_id AS groupId, U.unit AS unit, C.novel_id AS ownerId, C.name, C.url
+FROM merged_novel_chapter_unit U
+JOIN novel_chapters C
+ON C._id = U.chapter_id
+JOIN novels N
+ON N._id = C.novel_id
+AND N.favorite = 1
+WHERE U.unit IS NOT NULL;

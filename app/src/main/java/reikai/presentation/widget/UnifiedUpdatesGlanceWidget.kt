@@ -55,6 +55,10 @@ import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.util.system.dpToPx
 import kotlinx.coroutines.flow.combine
 import mihon.app.di.appGraph
+import reikai.domain.library.ContentType
+import reikai.domain.library.ReikaiLibraryPreferences
+import reikai.domain.merge.MergeGroupRepository
+import reikai.domain.merge.dedupeByMergeGroup
 import reikai.domain.novel.NovelRepository
 import reikai.domain.novel.interactor.GetCustomNovelInfo
 import reikai.domain.novel.model.CustomNovelInfo
@@ -98,6 +102,11 @@ class UnifiedUpdatesGlanceWidget : GlanceAppWidget() {
     @Inject private lateinit var getCustomMangaInfo: GetCustomMangaInfo
 
     @Inject private lateinit var getCustomNovelInfo: GetCustomNovelInfo
+
+    // A merge group is one series, so it gets one cover here as it gets one library row.
+    @Inject private lateinit var mergeGroupRepository: MergeGroupRepository
+
+    @Inject private lateinit var reikaiLibraryPreferences: ReikaiLibraryPreferences
 
     override val sizeMode = SizeMode.Exact
 
@@ -176,9 +185,14 @@ class UnifiedUpdatesGlanceWidget : GlanceAppWidget() {
         val novelCoverOverlay = customNovel.associateBy { it.novelId }
         val mangaCoverOverlay = customManga.associateBy { it.mangaId }
         // The manga query already returns unread only (getUpdates read=false); filter the novel side to
-        // match. Dedupe per series, then give each section half the rows.
+        // match. Dedupe per series, then per merge group so a series grouped across sources draws one
+        // cover, then give each section half the rows.
+        val merged = reikaiLibraryPreferences.seriesMergingEnabled.get()
+        val novelGroups = if (merged) mergeGroupRepository.getAllMemberships(ContentType.NOVELS) else emptyMap()
+        val mangaGroups = if (merged) mergeGroupRepository.getAllMemberships(ContentType.MANGA) else emptyMap()
         val novelRows = novel.filter { !it.read }.distinctBy { it.novelId }
-        val mangaRows = manga.distinctBy { it.mangaId }
+            .dedupeByMergeGroup(novelGroups) { it.novelId }
+        val mangaRows = manga.distinctBy { it.mangaId }.dedupeByMergeGroup(mangaGroups) { it.mangaId }
         val perSectionRows = (rowCount / 2).coerceAtLeast(1)
         val cap = perSectionRows * columnCount
 
