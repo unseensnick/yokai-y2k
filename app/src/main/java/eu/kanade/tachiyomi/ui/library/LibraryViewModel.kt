@@ -514,13 +514,7 @@ class LibraryViewModel(
                 mergingEnabled = mergePrefs.mergingEnabled,
                 showMergeSourceIcons = mergePrefs.showMergeSourceIcons,
                 resolveSource = ::resolveMergeSource,
-                // RK: read fresh on every emission rather than cached, so finishing a chapter updates
-                //     the badge immediately: this flow already re-fires on any chapter change.
-                mergedUnreadByGroup = if (mergePrefs.mergingEnabled) {
-                    mergedChapterUnitRepository.getUnreadCounts(ContentType.MANGA)
-                } else {
-                    emptyMap()
-                },
+                mergedUnreadByGroup = if (mergePrefs.mergingEnabled) mergePrefs.mergedUnread else emptyMap(),
                 showUnreadBadge = preferences.unreadBadge,
                 overrideRankings = mergePrefs.overrideRankings,
                 preferredSourceIds = mergePrefs.preferredSources,
@@ -544,17 +538,25 @@ class LibraryViewModel(
         // leads on the user's chosen trunk. A reorder writes these tables/prefs and re-collapses live.
         val overrideRankings: Map<Long, List<Long>>,
         val preferredSources: List<Long>,
+        /** Per group, one unit per chapter it covers that no source has read. A group absent from the
+         *  map has not been stitched yet, which is not the same as having nothing left to read. */
+        val mergedUnread: Map<Long, Long> = emptyMap(),
     )
 
     private fun mergePrefsFlow(): Flow<MergePrefs> = combine(
-        mergeGroupRepository.getAllMembershipsAsFlow(ContentType.MANGA),
-        reikaiLibraryPreferences.seriesMergingEnabled.changes(),
-        reikaiLibraryPreferences.showMergeSourceIcons.changes(),
-        mergeGroupRepository.getOverrideRankingsAsFlow(ContentType.MANGA),
-        reikaiLibraryPreferences.preferredMangaSources.changes(),
-    ) { membership, mergingEnabled, showIcons, overrideRankings, preferredSources ->
-        MergePrefs(membership, mergingEnabled, showIcons, overrideRankings, preferredSources)
-    }
+        combine(
+            mergeGroupRepository.getAllMembershipsAsFlow(ContentType.MANGA),
+            reikaiLibraryPreferences.seriesMergingEnabled.changes(),
+            reikaiLibraryPreferences.showMergeSourceIcons.changes(),
+            mergeGroupRepository.getOverrideRankingsAsFlow(ContentType.MANGA),
+            reikaiLibraryPreferences.preferredMangaSources.changes(),
+        ) { membership, mergingEnabled, showIcons, overrideRankings, preferredSources ->
+            MergePrefs(membership, mergingEnabled, showIcons, overrideRankings, preferredSources)
+        },
+        // Folded in rather than read in the transform: reconciliation writes the stitch while the
+        // library is already on screen, and nothing else makes this flow re-emit when it lands.
+        mergedChapterUnitRepository.getUnreadCountsAsFlow(ContentType.MANGA),
+    ) { prefs, unread -> prefs.copy(mergedUnread = unread) }
 
     private suspend fun resolveMergeSource(sourceId: Long): DomainSource {
         val s = sourceManager.getOrStub(sourceId)

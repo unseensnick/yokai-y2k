@@ -5,11 +5,14 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import reikai.domain.library.ContentType
 import reikai.domain.merge.ChapterUnit
 import reikai.domain.merge.MergedChapterUnitRepository
 import reikai.domain.merge.MergedChapterUnitRepository.StoredUnit
 import tachiyomi.data.Database
+import tachiyomi.data.subscribeToList
 
 @Inject
 @SingleIn(AppScope::class)
@@ -43,6 +46,12 @@ class MergedChapterUnitRepositoryImpl(
             else ->
                 queries.unreadCountsByGroup().awaitAsList().associate { it.groupId to it.unreadCount }
         }
+
+    override fun getUnreadCountsAsFlow(contentType: ContentType): Flow<Map<Long, Long>> =
+        when (contentType) {
+            ContentType.NOVELS -> queries.unreadCountsByGroupNovel { groupId, unread -> groupId to unread }
+            else -> queries.unreadCountsByGroup { groupId, unread -> groupId to unread }
+        }.subscribeToList().map { it.toMap() }
 
     override suspend fun getCoveredChapterCounts(): Map<Long, Long> =
         queries.coveredChapterCountsByManga().awaitAsList().associate { it.mangaId to it.coveredCount }

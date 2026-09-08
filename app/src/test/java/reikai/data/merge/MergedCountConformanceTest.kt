@@ -125,6 +125,32 @@ class MergedCountConformanceTest {
     }
 
     @Test
+    @DisplayName("a stitched group that is fully read reports zero, not nothing")
+    fun fullyReadGroupReportsZero() = runTest {
+        // The distinction the library depends on: absent means NOT STITCHED YET, so the row falls back
+        // to its leading source's own count. Reading absent as zero badged a freshly stitched library
+        // as finished until something else made the list rebuild.
+        val rows = listOf(
+            Row(id = 10, owner = 1, name = "Chapter 1: Anchor", number = 1.0, read = true),
+            Row(id = 20, owner = 2, name = "Chapter 8: Anchor", number = 8.0, read = true),
+        )
+
+        novelBadgeCount(rows) shouldBe 0
+        units.getUnreadCounts(ContentType.NOVELS).size shouldBe 1
+    }
+
+    @Test
+    @DisplayName("a group nothing has stitched is absent, so a caller can tell it apart")
+    fun unstitchedGroupIsAbsent() = runTest {
+        insertNovel(1)
+        insertNovel(2)
+        groups.createGroup(ContentType.NOVELS, listOf(1, 2))!!
+        insertNovelChapter(Row(id = 10, owner = 1, name = "Chapter 1: Anchor", number = 1.0))
+
+        units.getUnreadCounts(ContentType.NOVELS).isEmpty() shouldBe true
+    }
+
+    @Test
     @DisplayName("manga: a chapter both sources carry is one chapter to the badge and to the list")
     fun mangaNumberMatchAgrees() = runTest {
         val rows = listOf(

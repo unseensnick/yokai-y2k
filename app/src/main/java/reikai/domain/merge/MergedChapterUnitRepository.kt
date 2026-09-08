@@ -1,5 +1,6 @@
 package reikai.domain.merge
 
+import kotlinx.coroutines.flow.Flow
 import reikai.domain.library.ContentType
 
 /**
@@ -31,6 +32,10 @@ interface MergedChapterUnitRepository {
      * must read a missing group as zero rather than as "no data, keep the last value".
      */
     suspend fun getUnreadCounts(contentType: ContentType): Map<Long, Long>
+
+    /** Reactive [getUnreadCounts]: re-emits when the stitch or any chapter behind it changes, so a
+     *  badge is not left showing what the group looked like before it was stitched. */
+    fun getUnreadCountsAsFlow(contentType: ContentType): Flow<Map<Long, Long>>
 
     /**
      * How many of its group's chapters each merged manga covers, keyed by manga id: the count the

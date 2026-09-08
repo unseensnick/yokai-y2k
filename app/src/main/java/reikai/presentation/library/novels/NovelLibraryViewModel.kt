@@ -242,14 +242,19 @@ class NovelLibraryViewModel(
             )
         }
         val mergeFlow = combine(
-            mergeGroupRepository.getAllMembershipsAsFlow(ContentType.NOVELS),
-            reikaiLibraryPreferences.seriesMergingEnabled.changes(),
-            reikaiLibraryPreferences.showMergeSourceIcons.changes(),
-            mergeGroupRepository.getOverrideRankingsAsFlow(ContentType.NOVELS),
-            reikaiLibraryPreferences.preferredNovelSources.changes(),
-        ) { membership, mergingEnabled, showIcons, overrideRankings, preferredSources ->
-            MergeSettings(membership, mergingEnabled, showIcons, overrideRankings, preferredSources)
-        }
+            combine(
+                mergeGroupRepository.getAllMembershipsAsFlow(ContentType.NOVELS),
+                reikaiLibraryPreferences.seriesMergingEnabled.changes(),
+                reikaiLibraryPreferences.showMergeSourceIcons.changes(),
+                mergeGroupRepository.getOverrideRankingsAsFlow(ContentType.NOVELS),
+                reikaiLibraryPreferences.preferredNovelSources.changes(),
+            ) { membership, mergingEnabled, showIcons, overrideRankings, preferredSources ->
+                MergeSettings(membership, mergingEnabled, showIcons, overrideRankings, preferredSources)
+            },
+            // Folded in rather than read while collapsing: reconciliation writes the stitch while the
+            // library is already on screen, and nothing else makes this flow re-emit when it lands.
+            mergedChapterUnitRepository.getUnreadCountsAsFlow(ContentType.NOVELS),
+        ) { merge, unread -> merge.copy(mergedUnread = unread) }
         // No group-by input: grouping is LibraryEngine's, and re-running this whole pipeline on a
         // group-mode change would rebuild the filtered list for a decision it no longer makes.
         return combine(
@@ -318,25 +323,14 @@ class NovelLibraryViewModel(
             settings.merge.preferredSources,
         )
         // Replace each group's unread with the deduplicated cross-source count: one unit per chapter the
-        // group covers, unread only when no source's copy is read. Absent from the map means everything
-        // is read; an empty map means the identities are not written yet, so the group keeps the
-        // representative's own count rather than reporting a wrong one.
-        val mergedUnread = if (settings.merge.mergingEnabled) {
-            mergedChapterUnitRepository.getUnreadCounts(ContentType.NOVELS)
-        } else {
-            emptyMap()
-        }
-        val groups = if (mergedUnread.isEmpty()) {
-            collapsedAll
-        } else {
-            collapsedAll.map { group ->
-                val groupId = settings.merge.membership[group.representative.novel.id]
-                if (group.memberIds.size > 1 && groupId != null) {
-                    group.copy(unreadCount = mergedUnread[groupId] ?: 0L)
-                } else {
-                    group
-                }
-            }
+        // group covers, unread only when no source's copy is read. A group absent from the map has not
+        // been stitched yet, so it keeps the representative's own count: reading that as zero badged a
+        // freshly stitched library as fully read until something made the list rebuild.
+        val mergedUnread = if (settings.merge.mergingEnabled) settings.merge.mergedUnread else emptyMap()
+        val groups = collapsedAll.map { group ->
+            val groupId = settings.merge.membership[group.representative.novel.id]
+            val merged = groupId?.takeIf { group.memberIds.size > 1 }?.let { mergedUnread[it] }
+            if (merged == null) group else group.copy(unreadCount = merged)
         }
         // Union each merge group's member tracks (deduped per tracker), keyed by the rep's real novel id,
         // so the shared filter's tracker axis and the sort's mean score both read a track bound on ANY
@@ -657,6 +651,9 @@ class NovelLibraryViewModel(
         // row leads on the user's chosen trunk. A reorder writes these and re-collapses the library live.
         val overrideRankings: Map<Long, List<Long>>,
         val preferredSources: List<String>,
+        /** Per group, one unit per chapter it covers that no source has read. A group absent from the
+         *  map has not been stitched yet, which is not the same as having nothing left to read. */
+        val mergedUnread: Map<Long, Long> = emptyMap(),
     )
 
     /** Carries the per-session filters plus the global Downloaded-only mode out of the filter sub-flow. */

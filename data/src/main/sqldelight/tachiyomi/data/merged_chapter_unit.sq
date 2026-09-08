@@ -173,8 +173,13 @@ ORDER BY unit, copy_order;
 -- Members that have left the library and excluded scanlators are dropped HERE rather than before the
 -- stitch, so both stay instant: a unit whose every row is filtered out disappears from this count and
 -- from the list together.
+--
+-- CONSUMER CONTRACT: every STITCHED group has a row, carrying 0 when it is fully read. An absent group
+-- means it has not been stitched yet, which the caller must show as its leading source's own count
+-- rather than as zero: reconciliation runs while the library is already on screen, so "no row yet" and
+-- "nothing left to read" have to be told apart or a series reads as finished for a moment.
 unreadCountsByGroup:
-SELECT group_id AS groupId, count(*) AS unreadCount
+SELECT group_id AS groupId, coalesce(sum(CASE WHEN readCopies = 0 THEN 1 ELSE 0 END), 0) AS unreadCount
 FROM (
     SELECT
         U.group_id AS group_id,
@@ -193,12 +198,11 @@ FROM (
     AND ES.scanlator IS NULL
     GROUP BY U.group_id, U.unit
 ) AS G
-WHERE G.readCopies = 0
 GROUP BY G.group_id;
 
 -- Novel twin. No scanlator join: novels have no scanlators (see novelLibraryView).
 unreadCountsByGroupNovel:
-SELECT group_id AS groupId, count(*) AS unreadCount
+SELECT group_id AS groupId, coalesce(sum(CASE WHEN readCopies = 0 THEN 1 ELSE 0 END), 0) AS unreadCount
 FROM (
     SELECT
         U.group_id AS group_id,
@@ -213,7 +217,6 @@ FROM (
     WHERE U.unit IS NOT NULL
     GROUP BY U.group_id, U.unit
 ) AS G
-WHERE G.readCopies = 0
 GROUP BY G.group_id;
 
 -- How many of the group's chapters each member covers: the count the stitch ranks the trunk on, read
